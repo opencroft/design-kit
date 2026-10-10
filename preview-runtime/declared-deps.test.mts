@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { declaredRanges, moduleResolver, moduleSource, npmModuleKey, parseDependency, undeclaredPackages } from './declared-deps.ts'
+import {
+  declaredRanges,
+  moduleResolver,
+  moduleSource,
+  npmModuleKey,
+  parseDependency,
+  undeclaredPackages,
+} from './declared-deps.ts'
 
 test('a dependency entry splits into package and range, scoped names included', () => {
   assert.deepEqual(parseDependency('lucide-react@^1.14.0'), { name: 'lucide-react', range: '^1.14.0' })
@@ -13,7 +20,11 @@ test('a dependency entry splits into package and range, scoped names included', 
 test('a declared package loads from npm at its declared range, subpaths included', () => {
   const declared = declaredRanges(['lucide-react@^1.14.0', '@base-ui/react@^1.0.0', 'cn'])
   assert.deepEqual(moduleSource('lucide-react', declared), { kind: 'npm', spec: 'lucide-react', range: '^1.14.0' })
-  assert.deepEqual(moduleSource('@base-ui/react/popover', declared), { kind: 'npm', spec: '@base-ui/react/popover', range: '^1.0.0' })
+  assert.deepEqual(moduleSource('@base-ui/react/popover', declared), {
+    kind: 'npm',
+    spec: '@base-ui/react/popover',
+    range: '^1.0.0',
+  })
   assert.deepEqual(moduleSource('cn', declared), { kind: 'npm', spec: 'cn', range: '' })
 })
 
@@ -25,7 +36,10 @@ test('the React family is always built in, whatever is declared', () => {
 })
 
 test('a workspace package resolves to the unverifiable placeholder, undeclared', () => {
-  assert.deepEqual(moduleSource('agent-client/types', declaredRanges([])), { kind: 'workspace', spec: 'agent-client/types' })
+  assert.deepEqual(moduleSource('agent-client/types', declaredRanges([])), {
+    kind: 'workspace',
+    spec: 'agent-client/types',
+  })
   const placeholder = moduleResolver([], {}, new Map())('agent-client/types') as Record<string, () => unknown>
   assert.throws(() => placeholder.anything(), /unverifiable-dep:workspace-package\|agent-client\/types/)
 })
@@ -59,13 +73,23 @@ test('the resolver answers each item from its own declarations', () => {
 })
 
 test('undeclared packages are reported by package name, the React family exempt', () => {
-  const modules = ['react', 'react/jsx-runtime', '@base-ui/react/popover', 'lucide-react', 'cn', './sibling', '@/components/ui/button']
+  const modules = [
+    'react',
+    'react/jsx-runtime',
+    '@base-ui/react/popover',
+    'lucide-react',
+    'cn',
+    './sibling',
+    '@/components/ui/button',
+  ]
   assert.deepEqual(undeclaredPackages(modules, ['lucide-react@^1.14.0']), ['@base-ui/react', 'cn'])
   assert.deepEqual(undeclaredPackages(modules, ['lucide-react', '@base-ui/react', 'cn']), [])
 })
 
 test('workspace packages are never required to be declared', () => {
-  assert.deepEqual(undeclaredPackages(['agent-client/types', 'ui/components/ui/button', 'agent-chat', 'marked'], []), ['marked'])
+  assert.deepEqual(undeclaredPackages(['agent-client/types', 'ui/components/ui/button', 'agent-chat', 'marked'], []), [
+    'marked',
+  ])
 })
 
 test('an item importing nothing from npm has nothing undeclared', () => {

@@ -7,7 +7,7 @@
 // the control has something to discard and nowhere to discard it to, and every wrong answer to it — offering the act, or refusing
 // it with the other state's sentence — is a sentence somebody reads.
 //
-// The rest of this rule lives in files that import `@ext/host` and cannot be
+// The rest of this rule lives in files that import `@opencroft/client` and cannot be
 // imported here, so the source-text guards at the bottom say only that they
 // ask this function rather than answering for themselves. They cannot see a
 // render; that is a person in front of the screen.
@@ -24,7 +24,10 @@ test('no draft is nothing to discard, whether or not anything was ever published
 })
 
 test('a draft over a published version is the act being offered', () => {
-  assert.deepEqual(discardAvailability(true, 3), { available: true, title: 'Take every file back to the published version' })
+  assert.deepEqual(discardAvailability(true, 3), {
+    available: true,
+    title: 'Take every file back to the published version',
+  })
 })
 
 test('an absent version is as good as a null one', () => {
@@ -115,9 +118,9 @@ test('the page reads the version it discards to rather than supplying one', () =
 })
 
 test('no substituted version reaches the act', () => {
-  // Exactly one substitute survives in this file — the header's own version
-  // display, named at its call site. A second means one has found its way back
-  // onto something that acts rather than something that shows.
-  assert.equal(page.split('record?.version ?? 1').length - 1, 1, 'a version substitute reached a second surface')
+  // None is in this file: the header says "never published" for a component
+  // with no published version. A substitute here is a version the store does
+  // not have, on the screen or in a request.
+  assert.equal(page.split('record?.version ?? 1').length - 1, 0, 'a version substitute is back')
   assert.match(page, /version=\{discardOpen \? discardTarget : null\}/)
 })

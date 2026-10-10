@@ -1,11 +1,11 @@
-import { icons, invoke, React } from '@ext/host'
-
 import { cn } from 'cn'
+import { Info } from 'lucide-react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
+
+import { invoke } from '../invoke'
 import { type FileComparison, VersionDiffView } from './version-diff-view'
 import { comparisonFor, pointsOf, type SelectionComparison } from './version-selection'
 import { VersionTimeline } from './version-timeline'
-
-const { Info } = icons
 
 // A component's publish history: a horizontal timeline over its versions, the
 // selection it makes, and the record of what each version changed.
@@ -76,7 +76,7 @@ function publishedOn(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString()
 }
 
-function Line({ children }: { children: React.ReactNode }) {
+function Line({ children }: { children: ReactNode }) {
   return <p className='px-1 py-2 text-xs text-muted-foreground'>{children}</p>
 }
 
@@ -87,13 +87,17 @@ function Changed({ changed, floor }: { changed: string[] | null; floor: number }
     // merely starts holding it here are different facts, and reporting them the
     // same way is what would let a truncated history read as a complete one.
     return floor > 1 ? (
-      <p className='text-xs text-muted-foreground'>This project's history begins at v{floor}, so what this version changed is not held here.</p>
+      <p className='text-xs text-muted-foreground'>
+        This project's history begins at v{floor}, so what this version changed is not held here.
+      </p>
     ) : (
       <p className='text-xs text-muted-foreground'>The first version — every file in it was new.</p>
     )
   }
   if (changed.length === 0) {
-    return <p className='text-xs text-muted-foreground'>No file changes — this publish moved the registry record only.</p>
+    return (
+      <p className='text-xs text-muted-foreground'>No file changes — this publish moved the registry record only.</p>
+    )
   }
   return (
     <ul className='space-y-0.5'>
@@ -112,25 +116,28 @@ function Changed({ changed, floor }: { changed: string[] | null; floor: number }
 function PredatesHistory({ comparison }: { comparison: Extract<SelectionComparison, { status: 'predatesHistory' }> }) {
   return (
     <Line>
-      {comparison.selectionLabel} cannot be shown. This project's history begins at v{comparison.floor}, so the state before it — which is what these changes
-      would be measured against — is not held here. Select from v{comparison.floor + 1} or later to compare within the history that is.
+      {comparison.selectionLabel} cannot be shown. This project's history begins at v{comparison.floor}, so the state
+      before it — which is what these changes would be measured against — is not held here. Select from v
+      {comparison.floor + 1} or later to compare within the history that is.
     </Line>
   )
 }
 
 export function ComponentHistory({ projectId, name }: { projectId: string; name: string }) {
-  const [state, setState] = React.useState<LoadState>({ status: 'loading' })
-  const [selection, setSelection] = React.useState<{ from: number; to: number } | null>(null)
-  const [content, setContent] = React.useState<ContentState>({ status: 'loading' })
+  const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const [selection, setSelection] = useState<{ from: number; to: number } | null>(null)
+  const [content, setContent] = useState<ContentState>({ status: 'loading' })
 
-  React.useEffect(() => {
+  useEffect(() => {
     let active = true
     setState({ status: 'loading' })
     setSelection(null)
     invoke<Revisions>('components.revisions', { projectId, name })
       .then((revisions) => {
         if (active) {
-          setState(revisions && Array.isArray(revisions.versions) ? { status: 'ready', revisions } : { status: 'failed' })
+          setState(
+            revisions && Array.isArray(revisions.versions) ? { status: 'ready', revisions } : { status: 'failed' },
+          )
         }
       })
       .catch(() => {
@@ -144,29 +151,45 @@ export function ComponentHistory({ projectId, name }: { projectId: string; name:
   }, [projectId, name])
 
   const revisions = state.status === 'ready' ? state.revisions : null
-  const points = React.useMemo(() => pointsOf(revisions?.versions ?? [], Boolean(revisions?.draftAhead)), [revisions])
+  const points = useMemo(() => pointsOf(revisions?.versions ?? [], Boolean(revisions?.draftAhead)), [revisions])
 
   // The selection starts on the newest point, both halves together — so the
   // panel opens showing something rather than asking to be configured first.
   const from = selection ? selection.from : Math.max(0, points.length - 1)
   const to = selection ? selection.to : Math.max(0, points.length - 1)
-  const comparison = React.useMemo(() => comparisonFor(points, revisions?.floor ?? 0, from, to), [points, revisions?.floor, from, to])
+  const comparison = useMemo(
+    () => comparisonFor(points, revisions?.floor ?? 0, from, to),
+    [points, revisions?.floor, from, to],
+  )
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (comparison?.status !== 'ok') {
       return
     }
     let active = true
     setContent({ status: 'loading' })
-    invoke<{ files: FileComparison[] }>('files.compareVersions', { projectId, component: name, from: comparison.from, to: comparison.to })
+    invoke<{ files: FileComparison[] }>('files.compareVersions', {
+      projectId,
+      component: name,
+      from: comparison.from,
+      to: comparison.to,
+    })
       .then((result) => {
         if (active) {
-          setContent({ status: 'diff', fromLabel: comparison.fromLabel, selectionLabel: comparison.selectionLabel, files: result.files })
+          setContent({
+            status: 'diff',
+            fromLabel: comparison.fromLabel,
+            selectionLabel: comparison.selectionLabel,
+            files: result.files,
+          })
         }
       })
       .catch((e: unknown) => {
         if (active) {
-          setContent({ status: 'failed', message: e instanceof Error ? e.message : 'This selection could not be read.' })
+          setContent({
+            status: 'failed',
+            message: e instanceof Error ? e.message : 'This selection could not be read.',
+          })
         }
       })
     return () => {
@@ -199,7 +222,12 @@ export function ComponentHistory({ projectId, name }: { projectId: string; name:
 
   return (
     <div className='space-y-4'>
-      <VersionTimeline points={points} from={from} to={to} onChange={(nextFrom, nextTo) => setSelection({ from: nextFrom, to: nextTo })} />
+      <VersionTimeline
+        points={points}
+        from={from}
+        to={to}
+        onChange={(nextFrom, nextTo) => setSelection({ from: nextFrom, to: nextTo })}
+      />
 
       <div>
         {comparison?.status === 'predatesHistory' ? (
@@ -209,7 +237,11 @@ export function ComponentHistory({ projectId, name }: { projectId: string; name:
         ) : content.status === 'failed' ? (
           <Line>{content.message}</Line>
         ) : (
-          <VersionDiffView files={content.files} fromLabel={content.fromLabel} selectionLabel={content.selectionLabel} />
+          <VersionDiffView
+            files={content.files}
+            fromLabel={content.fromLabel}
+            selectionLabel={content.selectionLabel}
+          />
         )}
       </div>
 
@@ -228,7 +260,13 @@ export function ComponentHistory({ projectId, name }: { projectId: string; name:
 
       <ul className='space-y-3'>
         {versions.map((entry) => (
-          <li key={entry.sha} className={cn('rounded-md border px-3 py-2', inSelection(entry.version) ? 'border-primary/40 bg-accent/30' : undefined)}>
+          <li
+            key={entry.sha}
+            className={cn(
+              'rounded-md border px-3 py-2',
+              inSelection(entry.version) ? 'border-primary/40 bg-accent/30' : undefined,
+            )}
+          >
             <div className='flex items-baseline justify-between gap-2'>
               <span className='text-sm font-semibold'>v{entry.version}</span>
               <span className='truncate text-xs text-muted-foreground'>
@@ -247,8 +285,8 @@ export function ComponentHistory({ projectId, name }: { projectId: string; name:
         <p className='flex items-start gap-1.5 text-xs text-muted-foreground'>
           <Info className='mt-0.5 size-3 shrink-0' />
           <span>
-            Versions before v{floor} predate this project's migrated history and are not held here, so this list starts where the record does rather than where the
-            component did.
+            Versions before v{floor} predate this project's migrated history and are not held here, so this list starts
+            where the record does rather than where the component did.
           </span>
         </p>
       )}

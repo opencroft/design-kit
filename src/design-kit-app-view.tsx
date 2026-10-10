@@ -1,17 +1,26 @@
-import { icons, invoke, React } from '@ext/host'
-import { useAppHref, useAppLocation, useAppNavigate } from '@opencroft/client'
+import { useAppHref, useAppLocation, useAppNavigate } from '@opencroft/client/app'
+import { Palette } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { PoolGroup } from '../preview-runtime/protocol'
 import { ChatDock, type ChatSelection } from './components/chat-panel'
 import { ComponentDoc } from './components/component-doc'
 import { ComponentPreviewPage } from './components/component-preview-page'
-import { componentAppPath, componentRouteOf, EDITOR_QUERY, isEditorView, legacyComponentRef, legacyLinkTarget } from './components/component-routes'
+import {
+  componentAppPath,
+  componentRouteOf,
+  EDITOR_QUERY,
+  isEditorView,
+  legacyComponentRef,
+  legacyLinkTarget,
+} from './components/component-routes'
 import { addressedComponent, selectForAddress } from './components/component-selection'
 import { ComponentTree } from './components/component-tree'
 import { LibraryShell } from './components/library-shell'
-import { SourceEditorPage } from './components/source-editor-page'
 import { ProjectThemeEditor } from './components/project-theme-editor'
+import { SourceEditorPage } from './components/source-editor-page'
 import type { ProjectThemeData } from './components/theme-editor'
+import { invoke } from './invoke'
 import { buildRegistryItems, type StoredComponent } from './registry/from-stored'
 
 // The Design Kit App's page IS the editor, on the instance's own project — the
@@ -49,49 +58,50 @@ export function DesignKitAppView({ instanceId, spaceSlug }: { instanceId: string
 }
 
 function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; spaceSlug: string }) {
-  const Icon = icons.Palette
   const location = useAppLocation()
   const navigate = useAppNavigate()
   const appHref = useAppHref()
   // undefined = loading; null = the instance could not be resolved.
-  const [project, setProject] = React.useState<AppProject | null | undefined>(undefined)
+  const [project, setProject] = useState<AppProject | null | undefined>(undefined)
   // null = the list could not be read, and it is a separate value from the
   // empty list on purpose. As `[]` a failed read would be byte-identical to a
   // project that genuinely holds nothing, so the page would have to pick one
   // of two sentences, and both are false when the read has failed. It cannot
   // choose an honest one while the two states share a value. Same vocabulary
   // as `project` above, which makes exactly this distinction.
-  const [stored, setStored] = React.useState<StoredComponent[] | null>([])
-  const [loadingComponents, setLoadingComponents] = React.useState(true)
+  const [stored, setStored] = useState<StoredComponent[] | null>([])
+  const [loadingComponents, setLoadingComponents] = useState(true)
   // What was asked for is the address and nothing else: a pick from the tree
   // moves the App to the component's path, so a component reached by a click
   // resolves down the same path as one reached by a link, a reload or Back.
-  const route = React.useMemo(() => componentRouteOf(location.path), [location.path])
+  const route = useMemo(() => componentRouteOf(location.path), [location.path])
   const legacyRef = legacyComponentRef(location.search)
   const editorOpen = isEditorView(location.search)
   // Stacked layout only: whether the folded component tree is open. Held
   // here rather than in the shell so that choosing a component can fold it —
   // choosing one is a request to see it.
-  const [treeOpen, setTreeOpen] = React.useState(false)
+  const [treeOpen, setTreeOpen] = useState(false)
 
-  const reloadProject = React.useCallback(() => {
+  const reloadProject = useCallback(() => {
     return invoke<AppProject | null>('app.project', { instanceId })
       .then((p) => setProject(p ?? null))
       .catch(() => setProject(null))
   }, [instanceId])
 
-  const reloadComponents = React.useCallback(() => {
+  const reloadComponents = useCallback(() => {
     setLoadingComponents(true)
-    return invoke<StoredComponent[]>('components.list', instanceId)
-      // A reply that is not a list is not an empty project either — it is a
-      // read that did not produce one, and it takes the same answer as a
-      // thrown one rather than being rounded down to nothing.
-      .then((list) => setStored(Array.isArray(list) ? list : null))
-      .catch(() => setStored(null))
-      .finally(() => setLoadingComponents(false))
+    return (
+      invoke<StoredComponent[]>('components.list', instanceId)
+        // A reply that is not a list is not an empty project either — it is a
+        // read that did not produce one, and it takes the same answer as a
+        // thrown one rather than being rounded down to nothing.
+        .then((list) => setStored(Array.isArray(list) ? list : null))
+        .catch(() => setStored(null))
+        .finally(() => setLoadingComponents(false))
+    )
   }, [instanceId])
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false
     Promise.resolve()
       .then(() => (cancelled ? undefined : reloadProject()))
@@ -105,7 +115,7 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
   // for everything DOWNSTREAM of here — the tree, the selection, the address.
   // What it is not the same as is what the page says about it, and that is
   // decided from `stored` itself rather than from this.
-  const items = React.useMemo(() => buildRegistryItems(stored ?? []), [stored])
+  const items = useMemo(() => buildRegistryItems(stored ?? []), [stored])
 
   // Derived, and held in no second place. A fallback that wrote a substitute
   // BACK into the selection, or substituted at render, would leave nothing in
@@ -127,15 +137,21 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
   // Empty until the project read lands. That reads as "no address is for this
   // page yet", which is the safe direction while there is nothing to show and
   // nothing to write.
-  const identities = React.useMemo(() => (project ? [project.slug, project.id] : []), [project])
-  const selection = React.useMemo(
-    () => selectForAddress(route, legacyRef, items.map((i) => i.name), identities),
+  const identities = useMemo(() => (project ? [project.slug, project.id] : []), [project])
+  const selection = useMemo(
+    () =>
+      selectForAddress(
+        route,
+        legacyRef,
+        items.map((i) => i.name),
+        identities,
+      ),
     [route, legacyRef, items, identities],
   )
   const item = selection.status === 'selected' ? items.find((i) => i.name === selection.name) : undefined
   const addressName = addressedComponent(selection)
 
-  React.useEffect(() => {
+  useEffect(() => {
     // Only the bare address is rewritten — to the component it resolved to,
     // the one a `?component=` link named or else the first — and in place, so
     // Back does not return to an address that only ever forwarded. A path
@@ -147,8 +163,8 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
     }
   }, [project, route.page, addressName, location.search, navigate])
 
-  const [sources, setSources] = React.useState<PoolGroup[]>([])
-  React.useEffect(() => {
+  const [sources, setSources] = useState<PoolGroup[]>([])
+  useEffect(() => {
     setSources([])
     const name = item?.name
     if (!name) {
@@ -178,14 +194,21 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
     return (
       <div className='flex h-full w-full items-center justify-center p-6'>
         <div className='flex max-w-md flex-col items-center gap-3 text-center'>
-          <Icon className='size-8 text-muted-foreground' />
+          <Palette className='size-8 text-muted-foreground' />
           <p className='text-sm text-muted-foreground'>This Design Kit instance could not be resolved.</p>
         </div>
       </div>
     )
   }
 
-  const entries = items.map((i) => ({ name: i.name, title: i.title, type: i.type, category: i.category, draft: i.draft, href: appHref(componentAppPath(i.name)) }))
+  const entries = items.map((i) => ({
+    name: i.name,
+    title: i.title,
+    type: i.type,
+    category: i.category,
+    draft: i.draft,
+    href: appHref(componentAppPath(i.name)),
+  }))
 
   // Named for its type, since `selection` is the component resolution above.
   // With no resolved item it names only the project: with a request that did
@@ -197,7 +220,10 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
     }
     return {
       label: `${project.name} · ${item.title || item.name}`,
-      content: [projectLine, `Component: ${item.name}${item.title && item.title !== item.name ? ` (${item.title})` : ''}`].join('\n'),
+      content: [
+        projectLine,
+        `Component: ${item.name}${item.title && item.title !== item.name ? ` (${item.title})` : ''}`,
+      ].join('\n'),
     }
   })()
 
@@ -212,18 +238,17 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
       <ProjectThemeEditor projectId={instanceId} theme={project.theme} onSaved={() => reloadProject()} />
     </div>
   )
-  const componentTree = entries.length > 0
-    ? (
-        <ComponentTree
-          items={entries}
-          selected={item?.name ?? ''}
-          onSelect={(name) => {
-            navigate(componentAppPath(name))
-            setTreeOpen(false)
-          }}
-        />
-      )
-    : null
+  const componentTree =
+    entries.length > 0 ? (
+      <ComponentTree
+        items={entries}
+        selected={item?.name ?? ''}
+        onSelect={(name) => {
+          navigate(componentAppPath(name))
+          setTreeOpen(false)
+        }}
+      />
+    ) : null
 
   const content = loadingComponents ? (
     <div className='py-12 text-center text-xs text-muted-foreground'>Loading components…</div>
@@ -272,7 +297,14 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
       This project's components could not be read.
     </div>
   ) : item ? (
-    <ComponentDoc key={item.name} item={item} namespace={project.slug} projectId={instanceId} sources={sources} onOpenEditor={() => navigate(EDITOR_QUERY, { replace: true })} />
+    <ComponentDoc
+      key={item.name}
+      item={item}
+      namespace={project.slug}
+      projectId={instanceId}
+      sources={sources}
+      onOpenEditor={() => navigate(EDITOR_QUERY, { replace: true })}
+    />
   ) : selection.status === 'missing' ? (
     // The destructive register its siblings here use for an act that was turned
     // down, rather than the muted one the empty state below uses: an empty
@@ -289,7 +321,8 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
     </div>
   ) : (
     <div className='rounded-lg border border-dashed px-4 py-12 text-center text-sm text-muted-foreground'>
-      An empty project. Add a component with this instance's <code className='rounded bg-muted px-1 py-0.5 font-mono text-xs'>writeComponent</code> action.
+      An empty project. Add a component with this instance's{' '}
+      <code className='rounded bg-muted px-1 py-0.5 font-mono text-xs'>writeComponent</code> action.
     </div>
   )
 
@@ -315,7 +348,13 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
         // and ChatDock in components/chat-panel.tsx hands us a stretched
         // `flex-1 overflow-auto` flex item. Side by side, the page itself never
         // scrolls.
-        <LibraryShell header={projectHeader} tree={componentTree} treeLabel={item?.title || item?.name} treeOpen={treeOpen} onTreeOpenChange={setTreeOpen}>
+        <LibraryShell
+          header={projectHeader}
+          tree={componentTree}
+          treeLabel={item?.title || item?.name}
+          treeOpen={treeOpen}
+          onTreeOpenChange={setTreeOpen}
+        >
           {content}
         </LibraryShell>
       )}

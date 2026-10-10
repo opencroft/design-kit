@@ -6,17 +6,33 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { componentPaths, declaredPath, type FilePlacement, metaPath, ownedPaths, storagePath } from './component-paths.ts'
+import {
+  componentPaths,
+  declaredPath,
+  type FilePlacement,
+  metaPath,
+  ownedPaths,
+  storagePath,
+} from './component-paths.ts'
 
 test('a shipped file stores at its served target', () => {
-  assert.equal(storagePath('node-card', { path: 'node-card.tsx', target: 'components/ui/node-card.tsx', type: 'registry:ui' }), 'components/ui/node-card.tsx')
+  assert.equal(
+    storagePath('node-card', { path: 'node-card.tsx', target: 'components/ui/node-card.tsx', type: 'registry:ui' }),
+    'components/ui/node-card.tsx',
+  )
   // Target wins over path; path is the fallback when no target was declared.
   assert.equal(storagePath('node-card', { path: 'node-card.tsx', type: 'registry:ui' }), 'node-card.tsx')
 })
 
 test('an ignored file is stored under the component, because its path repeats across every component', () => {
-  assert.equal(storagePath('node-card', { path: 'docs/doc.mdx', type: 'registry:ignore' }), 'internal/node-card/docs/doc.mdx')
-  assert.equal(storagePath('other-card', { path: 'docs/doc.mdx', type: 'registry:ignore' }), 'internal/other-card/docs/doc.mdx')
+  assert.equal(
+    storagePath('node-card', { path: 'docs/doc.mdx', type: 'registry:ignore' }),
+    'internal/node-card/docs/doc.mdx',
+  )
+  assert.equal(
+    storagePath('other-card', { path: 'docs/doc.mdx', type: 'registry:ignore' }),
+    'internal/other-card/docs/doc.mdx',
+  )
 })
 
 test('declaredPath is the inverse of storagePath for both kinds of file', () => {
@@ -63,7 +79,10 @@ test('the scope never reaches a name-sharing neighbour', () => {
   // exists rather than one imagined for the test.
   const mine = componentPaths('source-thing', [{ path: 'docs/doc.mdx', type: 'registry:ignore' }])
   const neighbour = componentPaths('source-thing-header', [{ path: 'docs/doc.mdx', type: 'registry:ignore' }])
-  assert.deepEqual(mine.filter((p) => neighbour.includes(p)), [])
+  assert.deepEqual(
+    mine.filter((p) => neighbour.includes(p)),
+    [],
+  )
 })
 
 // ── The scope of a COMMIT ──────────────────────────────────
@@ -104,7 +123,11 @@ test('a dropped path that EXISTS again is left alone — it belongs to whoever d
   // back in the tree, so a neighbour re-declared it. Sweeping it here would
   // commit someone else's file under this component's change.
   assert.deepEqual(
-    await ownedPaths(asPublished([CARD]), asPublished([CARD, BADGE]), goneExcept(['components/ui/node-card.tsx', 'components/ui/badge.tsx'])),
+    await ownedPaths(
+      asPublished([CARD]),
+      asPublished([CARD, BADGE]),
+      goneExcept(['components/ui/node-card.tsx', 'components/ui/badge.tsx']),
+    ),
     ['registry/node-card.json', 'components/ui/node-card.tsx'],
   )
 })
@@ -173,7 +196,11 @@ test('a renamed component owns the registry record it was published under', asyn
 
 test('a rename that changes nothing else adds exactly one path — the old record', async () => {
   assert.deepEqual(
-    await ownedPaths({ name: 'node-panel', files: [CARD] }, { name: 'node-card', files: [CARD] }, goneExcept(['components/ui/node-card.tsx'])),
+    await ownedPaths(
+      { name: 'node-panel', files: [CARD] },
+      { name: 'node-card', files: [CARD] },
+      goneExcept(['components/ui/node-card.tsx']),
+    ),
     ['registry/node-panel.json', 'components/ui/node-card.tsx', 'registry/node-card.json'],
   )
 })
@@ -193,7 +220,12 @@ test('a head path still in the tree is left alone; the rest of the old record st
   // the narrowing gone.
   assert.deepEqual(
     await ownedPaths(RENAMED, UNDER_OLD_NAME, goneExcept(['components/ui/node-card.tsx', 'registry/node-card.json'])),
-    ['registry/node-panel.json', 'components/ui/node-card.tsx', 'internal/node-panel/docs/doc.mdx', 'internal/node-card/docs/doc.mdx'],
+    [
+      'registry/node-panel.json',
+      'components/ui/node-card.tsx',
+      'internal/node-panel/docs/doc.mdx',
+      'internal/node-card/docs/doc.mdx',
+    ],
   )
 })
 

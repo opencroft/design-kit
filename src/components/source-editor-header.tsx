@@ -1,5 +1,5 @@
-import { icons } from '@ext/host'
-import { Button } from '@ext/ui'
+import { Button } from '@opencroft/client/ui'
+import { Check, ChevronLeft, Loader2 } from 'lucide-react'
 
 import { discardAvailability } from './discard-availability'
 
@@ -12,7 +12,6 @@ import { discardAvailability } from './discard-availability'
 // availability rule lives in a sibling module: it decides whether a destructive
 // control is offered, and keeping it separate is what lets it be asserted
 // rather than only read.
-const { Check, ChevronLeft, Loader2 } = icons
 
 /** `warned` is a publish held at the last moment by a failed check — the panel
  *  above says what failed, and the button says what pressing it now does. */
@@ -20,8 +19,11 @@ export type PublishState = 'idle' | 'busy' | 'warned' | 'done'
 
 export interface SourceEditorHeaderProps {
   componentName: string
-  /** The published version. */
-  version: number
+  /** The published version, or nothing when this component has never been
+   *  published. Absent is said in words rather than given a number: the line
+   *  reads as the version a publish is measured against, and a stand-in number
+   *  there is a version the store does not have. */
+  version: number | null
   /** The draft holds changes the published version does not — persisted, so it
    *  cannot be lost, and stated quietly. */
   draftAhead?: boolean
@@ -138,7 +140,10 @@ export function SourceEditorHeader({
         <div className='flex min-w-0 flex-1 flex-col overflow-hidden'>
           <span className='truncate text-sm leading-tight font-medium'>{componentName}</span>
           <span className='flex min-w-0 items-center gap-1 overflow-hidden text-xs leading-tight text-muted-foreground'>
-            <span className='shrink-0 tabular-nums'>v{version}</span>
+            {/* Loose on purpose, like `discardTarget`: a design-kit preview that
+                sweeps this header's states passes "never published" as an
+                absent prop rather than null. */}
+            <span className='shrink-0 tabular-nums'>{version == null ? 'never published' : `v${version}`}</span>
             {published ? (
               <span className='flex shrink-0 items-center gap-1 text-emerald-600'>
                 <Check className='size-3' />

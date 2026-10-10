@@ -1,8 +1,9 @@
-import { icons, React } from '@ext/host'
-import { DiffEditor, type DiffEditorProps, type DiffOnMount, loader } from '@monaco-editor/react'
-
+import { DiffEditor, type DiffEditorProps, type DiffOnMount } from '@monaco-editor/react'
 import { cn } from 'cn'
-import { languageFor, MONACO_THEME } from './monaco-code-editor'
+import { Columns2, FileMinus, FilePen, FilePlus, Rows2 } from 'lucide-react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+
+import { initMonaco, languageFor, MONACO_THEME, monoFontFamily } from './monaco-code-editor'
 
 // The difference between two points in a component's history, shown in an
 // established diff convention rather than a new one: Monaco's `DiffEditor`,
@@ -17,8 +18,6 @@ import { languageFor, MONACO_THEME } from './monaco-code-editor'
 // specifier the preview refuses to resolve (preview-runtime/unverifiable-dep.ts)
 // — importing it here would reintroduce the failure that refusal exists to
 // prevent.
-
-const { Columns2, Rows2, FilePlus, FileMinus, FilePen } = icons
 
 export type FileChange = 'added' | 'removed' | 'changed' | 'unchanged'
 
@@ -62,8 +61,8 @@ type LoadState = 'loading' | 'ready' | 'failed'
  *  and released here — detached first. This cleanup runs before the library's
  *  own, since React runs a parent's cleanups before its children's. */
 function SafeDiffEditor(props: DiffEditorProps) {
-  const editorRef = React.useRef<Parameters<DiffOnMount>[0] | null>(null)
-  React.useEffect(
+  const editorRef = useRef<Parameters<DiffOnMount>[0] | null>(null)
+  useEffect(
     () => () => {
       const editor = editorRef.current
       const models = editor?.getModel()
@@ -87,20 +86,27 @@ function SafeDiffEditor(props: DiffEditorProps) {
   )
 }
 
-function Note({ children }: { children: React.ReactNode }) {
+function Note({ children }: { children: ReactNode }) {
   return <p className='px-1 py-3 text-xs text-muted-foreground'>{children}</p>
 }
 
-export function VersionDiffView({ files, fromLabel, selectionLabel }: { files: FileComparison[]; fromLabel: string; selectionLabel: string }) {
-  const changed = React.useMemo(() => files.filter((f) => f.change !== 'unchanged'), [files])
-  const [selected, setSelected] = React.useState<string>('')
-  const [sideBySide, setSideBySide] = React.useState(true)
-  const [monaco, setMonaco] = React.useState<LoadState>('loading')
+export function VersionDiffView({
+  files,
+  fromLabel,
+  selectionLabel,
+}: {
+  files: FileComparison[]
+  fromLabel: string
+  selectionLabel: string
+}) {
+  const changed = useMemo(() => files.filter((f) => f.change !== 'unchanged'), [files])
+  const [selected, setSelected] = useState<string>('')
+  const [sideBySide, setSideBySide] = useState(true)
+  const [monaco, setMonaco] = useState<LoadState>('loading')
 
-  React.useEffect(() => {
+  useEffect(() => {
     let live = true
-    loader
-      .init()
+    initMonaco()
       .then(() => live && setMonaco('ready'))
       .catch(() => live && setMonaco('failed'))
     return () => {
@@ -129,7 +135,8 @@ export function VersionDiffView({ files, fromLabel, selectionLabel }: { files: F
             shows what v2 and v3 together introduced, which is measured from
             v1. Showing only one of the two would read as an off-by-one. */}
         <p className='text-xs text-muted-foreground'>
-          <span className='font-medium text-foreground'>{selectionLabel}</span> · {changed.length} {changed.length === 1 ? 'file' : 'files'} · against{' '}
+          <span className='font-medium text-foreground'>{selectionLabel}</span> · {changed.length}{' '}
+          {changed.length === 1 ? 'file' : 'files'} · against{' '}
           <span className='font-medium text-foreground'>{fromLabel}</span>
         </p>
         <div className='flex gap-0.5 rounded-md border p-0.5'>
@@ -183,7 +190,10 @@ export function VersionDiffView({ files, fromLabel, selectionLabel }: { files: F
 
         <div className='min-w-0 overflow-hidden rounded-md border'>
           {monaco === 'failed' ? (
-            <Note>The diff viewer could not load. It is fetched over the network, so this is about the connection rather than about these versions.</Note>
+            <Note>
+              The diff viewer could not load. It is fetched over the network, so this is about the connection rather
+              than about these versions.
+            </Note>
           ) : monaco === 'loading' ? (
             <Note>Loading the diff viewer…</Note>
           ) : active ? (
@@ -193,7 +203,7 @@ export function VersionDiffView({ files, fromLabel, selectionLabel }: { files: F
               language={languageFor(active.target)}
               original={active.before ?? ''}
               modified={active.after ?? ''}
-              options={{ ...OPTIONS, renderSideBySide: sideBySide }}
+              options={{ ...OPTIONS, fontFamily: monoFontFamily(), renderSideBySide: sideBySide }}
             />
           ) : null}
         </div>

@@ -44,7 +44,11 @@ test('a draft put back where it started gets its first token back', () => {
 })
 
 test('a file added or removed changes it, so the file set is part of the state', () => {
-  const withDocs = [RECORD, SOURCE, entry('dddddddddddddddddddddddddddddddddddddddd', 'internal/thing/docs/doc.mdx')].join('\n')
+  const withDocs = [
+    RECORD,
+    SOURCE,
+    entry('dddddddddddddddddddddddddddddddddddddddd', 'internal/thing/docs/doc.mdx'),
+  ].join('\n')
   assert.notEqual(stateToken(withDocs), stateToken(published))
   assert.notEqual(stateToken([RECORD].join('\n')), stateToken(published))
 })
@@ -101,7 +105,10 @@ test('a call still naming the old parameter is refused, on the shared wrapper', 
 test('an empty state is carried to the guard, not filtered into no guard', () => {
   const index = readFileSync(new URL('./index.ts', import.meta.url), 'utf-8')
   const reader = index.slice(index.indexOf('const appParamState ='))
-  assert.ok(!/expectedState !== ''/.test(reader.slice(0, reader.indexOf('\n\n'))), 'the empty string is being filtered out again')
+  assert.ok(
+    !/expectedState !== ''/.test(reader.slice(0, reader.indexOf('\n\n'))),
+    'the empty string is being filtered out again',
+  )
 
   const store = readFileSync(new URL('./repo-store.ts', import.meta.url), 'utf-8')
   const guard = store.slice(store.indexOf('async function assertFresh'))

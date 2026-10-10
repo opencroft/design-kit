@@ -1,7 +1,8 @@
-import { icons, React } from '@ext/host'
-import { Button, Input } from '@ext/ui'
-
+import { Button, Input } from '@opencroft/client/ui'
 import { cn } from 'cn'
+import { AlertCircle, Pencil, Plus } from 'lucide-react'
+import { type ChangeEvent, type KeyboardEvent, useState } from 'react'
+
 import { MiddleTruncate } from './middle-truncate'
 import { RowContextMenu } from './row-context-menu'
 
@@ -19,8 +20,6 @@ import { RowContextMenu } from './row-context-menu'
 // Where an action lives does not change how destructive it is. Delete
 // still answers IN the row rather than deleting on the press — the menu starts
 // the confirmation, and the confirmation names the file.
-const { AlertCircle, Pencil, Plus } = icons
-
 export interface EditorFileRow {
   path: string
   /** This file has changed since the component's last published version — what
@@ -71,7 +70,7 @@ function PathInput({
   onSubmit: (value: string) => void
   onCancel: () => void
 }) {
-  const [value, setValue] = React.useState(defaultValue)
+  const [value, setValue] = useState(defaultValue)
   return (
     <div>
       <Input
@@ -80,8 +79,8 @@ function PathInput({
         placeholder={placeholder}
         aria-label={placeholder}
         className='h-7 text-xs'
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
-        onKeyDown={(e: React.KeyboardEvent) => {
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
+        onKeyDown={(e: KeyboardEvent) => {
           if (e.key === 'Enter' && value.trim()) {
             onSubmit(value.trim())
           }
@@ -90,7 +89,9 @@ function PathInput({
           }
         }}
       />
-      {hint ? <p className={cn('px-1 pt-1 text-xs', caution ? 'text-amber-600' : 'text-muted-foreground')}>{hint(value)}</p> : null}
+      {hint ? (
+        <p className={cn('px-1 pt-1 text-xs', caution ? 'text-amber-600' : 'text-muted-foreground')}>{hint(value)}</p>
+      ) : null}
     </div>
   )
 }
@@ -117,7 +118,15 @@ export function SourceEditorFiles({
     <div className='flex h-full min-h-0 w-full flex-col'>
       <div className='flex shrink-0 items-center gap-2 border-b px-2 py-1.5'>
         <span className='min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground'>Files</span>
-        <Button type='button' variant='ghost' size='icon' className='size-6 shrink-0' aria-label='New file' title='New file' onClick={onNewFile}>
+        <Button
+          type='button'
+          variant='ghost'
+          size='icon'
+          className='size-6 shrink-0'
+          aria-label='New file'
+          title='New file'
+          onClick={onNewFile}
+        >
           <Plus className='size-3.5' />
         </Button>
       </div>
@@ -182,10 +191,22 @@ export function SourceEditorFiles({
                   <p className='text-xs font-medium text-destructive'>Delete this file?</p>
                   <MiddleTruncate text={file.path} tailChars={14} className='pt-0.5 text-xs text-destructive' />
                   <div className='flex items-center gap-1 pt-1.5'>
-                    <Button type='button' size='sm' variant='destructive' className='h-6 px-2 text-xs' onClick={() => onDeleteConfirm?.(file.path)}>
+                    <Button
+                      type='button'
+                      size='sm'
+                      variant='destructive'
+                      className='h-6 px-2 text-xs'
+                      onClick={() => onDeleteConfirm?.(file.path)}
+                    >
                       Delete
                     </Button>
-                    <Button type='button' size='sm' variant='ghost' className='h-6 px-2 text-xs' onClick={() => onDeleteCancel?.()}>
+                    <Button
+                      type='button'
+                      size='sm'
+                      variant='ghost'
+                      className='h-6 px-2 text-xs'
+                      onClick={() => onDeleteCancel?.()}
+                    >
                       Cancel
                     </Button>
                   </div>
@@ -211,20 +232,31 @@ export function SourceEditorFiles({
                   onClick={() => onSelect?.(file.path)}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors',
-                    active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    active
+                      ? 'bg-accent font-medium text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
                   {/* Slot held either way, so a file going dirty never shifts the names. */}
-                  <span aria-hidden='true' className={cn('size-1.5 shrink-0 rounded-full', file.dirty ? 'bg-primary' : 'bg-transparent')} />
+                  <span
+                    aria-hidden='true'
+                    className={cn('size-1.5 shrink-0 rounded-full', file.dirty ? 'bg-primary' : 'bg-transparent')}
+                  />
                   {file.dirty ? <span className='sr-only'>changed since the last published version</span> : null}
-                  <MiddleTruncate text={file.path} tailChars={14} className={cn('min-w-0 flex-1', active && 'font-medium')} />
+                  <MiddleTruncate
+                    text={file.path}
+                    tailChars={14}
+                    className={cn('min-w-0 flex-1', active && 'font-medium')}
+                  />
                   {/* Amber, and after the name rather than before it: the dot
                       says this file differs from what is published, and this
                       says the difference is yours — the reload left it as you
                       had it. A file marked only with a dot is one somebody
                       else moved and you are simply behind on. */}
                   {file.kept ? (
-                    <span className='shrink-0 rounded-full border border-amber-500/50 px-1.5 text-xs text-amber-600'>kept</span>
+                    <span className='shrink-0 rounded-full border border-amber-500/50 px-1.5 text-xs text-amber-600'>
+                      kept
+                    </span>
                   ) : null}
                   {file.failed ? (
                     <>

@@ -7,7 +7,7 @@
 // than inferred from its neighbour.
 //
 // The route half — which names a project actually holds, and refusing an empty
-// list — imports `@ext/host` and cannot be reached from here. The guards at the
+// list — imports `@opencroft/server` and cannot be reached from here. The guards at the
 // bottom read its source instead, and they say only that the wiring is in
 // place, not that it works.
 
@@ -17,7 +17,8 @@ import { test } from 'node:test'
 
 import { installRequestFrom } from './install-request.ts'
 
-const from = (component: unknown, project: unknown = null, name: unknown = null) => installRequestFrom(component, project, name)
+const from = (component: unknown, project: unknown = null, name: unknown = null) =>
+  installRequestFrom(component, project, name)
 
 test('a two-part reference installs that one component', () => {
   assert.deepEqual(from('kit.button'), { kind: 'component', project: 'kit', name: 'button' })
@@ -77,7 +78,7 @@ test('a resolver suffix is stripped before either reading', () => {
 const routeSource = readFileSync(new URL('./index.ts', import.meta.url), 'utf-8').replace(/^\s*(\/\/|\*|\/\*).*$/gm, '')
 
 test('the route asks this rather than deciding for itself', () => {
-  assert.match(routeSource, /installRequestFrom\(url\.searchParams\.get\('component'\)/)
+  assert.match(routeSource, /installRequestFrom\(\s*url\.searchParams\.get\('component'\)/)
 })
 
 test('the whole-project form refuses an empty component list', () => {

@@ -19,7 +19,10 @@ const hasGit = await run('git', ['--version']).then(
 // identity configured anywhere: no global or system config, no EMAIL in the
 // environment. `repoConfig` is written into the repository's own config first,
 // the way a repository created before per-commit identities still carries one.
-async function commitIn(author: string, repoConfig: Record<string, string> = {}): Promise<{ author: string; committer: string }> {
+async function commitIn(
+  author: string,
+  repoConfig: Record<string, string> = {},
+): Promise<{ author: string; committer: string }> {
   const dir = await mkdtemp(join(tmpdir(), 'commit-identity-'))
   try {
     const env = { PATH: process.env.PATH ?? '', HOME: dir, GIT_CONFIG_NOSYSTEM: '1' }
@@ -30,7 +33,17 @@ async function commitIn(author: string, repoConfig: Record<string, string> = {})
     }
     await writeFile(join(dir, 'button.tsx'), 'export const Button = 1\n')
     await git('add', 'button.tsx')
-    await git('-c', 'commit.gpgsign=false', '-c', 'user.useConfigOnly=true', ...commitAs(author), 'commit', '--quiet', '-m', 'Publish button v1')
+    await git(
+      '-c',
+      'commit.gpgsign=false',
+      '-c',
+      'user.useConfigOnly=true',
+      ...commitAs(author),
+      'commit',
+      '--quiet',
+      '-m',
+      'Publish button v1',
+    )
     const { stdout } = await git('log', '-1', '--format=%an <%ae>%n%cn <%ce>')
     const [authorLine, committerLine] = stdout.trim().split('\n')
     return { author: authorLine, committer: committerLine }
@@ -39,21 +52,32 @@ async function commitIn(author: string, repoConfig: Record<string, string> = {})
   }
 }
 
-test("a publish is committed under the caller's name, with no email", { skip: !hasGit && 'git is not installed' }, async () => {
+test("a publish is committed under the caller's name, with no email", {
+  skip: !hasGit && 'git is not installed',
+}, async () => {
   assert.deepEqual(await commitIn('Alice Example'), { author: 'Alice Example <>', committer: 'Alice Example <>' })
 })
 
-test("a repository whose config still names an identity is committed under the caller's name", { skip: !hasGit && 'git is not installed' }, async () => {
+test("a repository whose config still names an identity is committed under the caller's name", {
+  skip: !hasGit && 'git is not installed',
+}, async () => {
   const configured = { 'user.name': 'Example Kit', 'user.email': 'kit@example.com' }
   assert.deepEqual(await commitIn('agent-a', configured), { author: 'agent-a <>', committer: 'agent-a <>' })
 })
 
-test('a caller with no usable name is committed as the unnamed author', { skip: !hasGit && 'git is not installed' }, async () => {
+test('a caller with no usable name is committed as the unnamed author', {
+  skip: !hasGit && 'git is not installed',
+}, async () => {
   assert.deepEqual(await commitIn('  '), { author: `${UNNAMED_AUTHOR} <>`, committer: `${UNNAMED_AUTHOR} <>` })
 })
 
 test('angle brackets and line breaks cannot break the ident line', () => {
-  assert.deepEqual(commitAs('agent-a <x@example.com>\nsecond'), ['-c', 'user.name=agent-a x@example.com second', '-c', 'user.email='])
+  assert.deepEqual(commitAs('agent-a <x@example.com>\nsecond'), [
+    '-c',
+    'user.name=agent-a x@example.com second',
+    '-c',
+    'user.email=',
+  ])
 })
 
 test('the committer is the signed-in person, else the calling agent, else the unnamed author', () => {

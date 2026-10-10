@@ -11,7 +11,7 @@
 // already computed.
 //
 // So the policy lives here, apart from the builder it caches. This module
-// imports nothing: no `@ext/host`, not even a relative module that chains to
+// imports nothing: no `@opencroft/server`, not even a relative module that chains to
 // it, so the caching rules can be exercised directly with `node --test` instead
 // of being argued about. server/index.ts injects the real builders.
 //
@@ -70,7 +70,9 @@ interface Entry<V> {
   value: Promise<V>
 }
 
-export function createPreviewPoolCache<Pool, Shared>(deps: PreviewPoolCacheDeps<Pool, Shared>): PreviewPoolCache<Pool, Shared> {
+export function createPreviewPoolCache<Pool, Shared>(
+  deps: PreviewPoolCacheDeps<Pool, Shared>,
+): PreviewPoolCache<Pool, Shared> {
   let epoch = 0
   const pools = new Map<string, Entry<Pool>>()
   let sharedEntry: Entry<Shared> | undefined
@@ -79,7 +81,11 @@ export function createPreviewPoolCache<Pool, Shared>(deps: PreviewPoolCacheDeps<
   // readers arriving together (the client action and the validator, or several
   // preview frames mounting at once) then SHARE one build instead of racing two
   // identical ones and throwing one away.
-  const remember = <V>(start: () => Promise<V>, keep: (entry: Entry<V>) => void, forget: (entry: Entry<V>) => void): Promise<V> => {
+  const remember = <V>(
+    start: () => Promise<V>,
+    keep: (entry: Entry<V>) => void,
+    forget: (entry: Entry<V>) => void,
+  ): Promise<V> => {
     const entry: Entry<V> = { epoch, value: start() }
     keep(entry)
     // Evict on rejection, and do it here rather than at the next read so the

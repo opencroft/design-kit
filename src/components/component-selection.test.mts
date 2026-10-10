@@ -20,8 +20,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
-import { addressedComponent, type ComponentSelection, selectComponent, selectForAddress } from './component-selection.ts'
 import { componentRouteOf } from './component-routes.ts'
+import {
+  addressedComponent,
+  type ComponentSelection,
+  selectComponent,
+  selectForAddress,
+} from './component-selection.ts'
 
 const project = ['alert', 'button', 'card']
 
@@ -32,7 +37,8 @@ const project = ['alert', 'button', 'card']
 const identities = ['kit', 'dp_kit']
 
 /** A request against this page's project. */
-const select = (requested: string | null, names: readonly string[] = project) => selectComponent(requested, names, identities)
+const select = (requested: string | null, names: readonly string[] = project) =>
+  selectComponent(requested, names, identities)
 
 /** The address for a request against `project`, in one step — the composition
  *  a caller actually performs. */
@@ -83,7 +89,11 @@ test('a reference for another project does not resolve, even to a component of t
   // component the address did not ask for and rewrites the address to agree.
   // Nothing about the name is wrong; the half nobody compared is.
   assert.deepEqual(select('other.button'), { status: 'other-project', requested: 'other.button', project: 'other' })
-  assert.deepEqual(select('dp_other/button'), { status: 'other-project', requested: 'dp_other/button', project: 'dp_other' })
+  assert.deepEqual(select('dp_other/button'), {
+    status: 'other-project',
+    requested: 'dp_other/button',
+    project: 'dp_other',
+  })
 })
 
 test('the other-project answer carries the project that was asked for, not the whole reference', () => {
@@ -148,7 +158,17 @@ test('a request that does not resolve never produces an address naming a differe
   // both name a component this project really does hold, so a resolver that
   // compares only the name resolves them and the address is rewritten to a
   // different component than the one asked for. That rewrite is the harm.
-  for (const requested of ['kit.ghost', 'button', 'Button', 'kit.Card', 'kit.', '.card', 'kit.card.extra', 'other.button', 'dp_other.card']) {
+  for (const requested of [
+    'kit.ghost',
+    'button',
+    'Button',
+    'kit.Card',
+    'kit.',
+    '.card',
+    'kit.card.extra',
+    'other.button',
+    'dp_other.card',
+  ]) {
     assert.equal(addressFor(requested), null, `"${requested}" produced an address`)
   }
 })
@@ -165,7 +185,8 @@ test('a reference that resolves addresses its own component, and no reference ad
 // above.
 
 /** What the page asks for an App path, with an old link's reference beside it. */
-const atAddress = (path: string, legacyRef: string | null = null) => selectForAddress(componentRouteOf(path), legacyRef, project, identities)
+const atAddress = (path: string, legacyRef: string | null = null) =>
+  selectForAddress(componentRouteOf(path), legacyRef, project, identities)
 
 test('a component path opens that component, never the first', () => {
   assert.deepEqual(atAddress('/component/card'), { status: 'selected', name: 'card' })
@@ -195,14 +216,18 @@ test('the bare address keeps every answer an old link had', () => {
   assert.deepEqual(atAddress('/'), { status: 'selected', name: 'alert' })
   assert.deepEqual(atAddress('/', 'kit.button'), { status: 'selected', name: 'button' })
   assert.deepEqual(atAddress('/', 'kit.ghost'), { status: 'missing', requested: 'kit.ghost' })
-  assert.deepEqual(atAddress('/', 'other.button'), { status: 'other-project', requested: 'other.button', project: 'other' })
+  assert.deepEqual(atAddress('/', 'other.button'), {
+    status: 'other-project',
+    requested: 'other.button',
+    project: 'other',
+  })
 })
 
 // ── The page that has to use it ───────────────────────────────────────────
 //
 // Everything above runs the rule. Nothing above can tell whether the page
 // actually asks it, and the page cannot be imported here — it imports
-// `@ext/host`, which is not a package this repo installs — so what follows
+// `@opencroft/client`, which is not a package this repo installs — so what follows
 // reads its SOURCE and asserts the shape of the wiring.
 //
 // That is a weaker instrument and is not offered as anything else. It cannot
@@ -220,7 +245,7 @@ const page = pageSource.replace(/^\s*(\/\/|\*|\/\*).*$/gm, '')
 
 test('the page asks the rule rather than carrying its own copy', () => {
   assert.match(page, /from '\.\/components\/component-selection'/)
-  assert.match(page, /selectForAddress\(route, legacyRef, items\.map/)
+  assert.match(page, /selectForAddress\(\s*route,\s*legacyRef,\s*items\.map/)
 })
 
 test('the page says the address is for another project, and does not say the component is absent', () => {
@@ -239,7 +264,11 @@ test('a list that could not be read is its own state, not an empty one', () => {
   // sentences, and both would be false when the read had failed.
   assert.match(page, /useState<StoredComponent\[\] \| null>/)
   assert.match(page, /\.catch\(\(\) => setStored\(null\)\)/)
-  assert.doesNotMatch(page, /\.catch\(\(\) => setStored\(\[\]\)\)/, 'a failed read is rounded down to an empty project again')
+  assert.doesNotMatch(
+    page,
+    /\.catch\(\(\) => setStored\(\[\]\)\)/,
+    'a failed read is rounded down to an empty project again',
+  )
   // A reply that is not a list is a read that produced none, not a project
   // with nothing in it.
   assert.doesNotMatch(page, /Array\.isArray\(list\) \? list : \[\]/, 'a non-list reply is read as an empty project')
@@ -276,7 +305,7 @@ test('the page tells the rule everything its project answers to', () => {
   // address written with the id resolves today, and would start reading as
   // another project's the moment only the slug was compared.
   assert.match(page, /\[project\.slug, project\.id\]/)
-  assert.match(page, /selectForAddress\(route, legacyRef, items\.map\(\(i\) => i\.name\), identities\)/)
+  assert.match(page, /selectForAddress\(\s*route,\s*legacyRef,\s*items\.map\(\(i\) => i\.name\),\s*identities,?\s*\)/)
 })
 
 test('the page writes the address only where the rule permits it', () => {
@@ -287,8 +316,15 @@ test('the page writes the address only where the rule permits it', () => {
   assert.equal(page.split('navigate(legacyLinkTarget(').length - 1, 1, 'more than one address write')
   const refusal = page.indexOf("route.page === 'library' && addressName)")
   assert.ok(refusal > 0, 'the address write is no longer guarded by the refusal')
-  assert.ok(page.indexOf('navigate(legacyLinkTarget(') > refusal, 'the address is written before the refusal is consulted')
-  assert.match(page, /navigate\(legacyLinkTarget\(addressName, location\.search\), \{ replace: true \}\)/, 'the forward leaves an entry Back returns to, which only forwards again')
+  assert.ok(
+    page.indexOf('navigate(legacyLinkTarget(') > refusal,
+    'the address is written before the refusal is consulted',
+  )
+  assert.match(
+    page,
+    /navigate\(legacyLinkTarget\(addressName, location\.search\), \{ replace: true \}\)/,
+    'the forward leaves an entry Back returns to, which only forwards again',
+  )
 })
 
 test('the page keeps no fallback of its own', () => {

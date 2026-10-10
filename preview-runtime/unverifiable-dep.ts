@@ -58,7 +58,7 @@ export function unverifiableDepError(cause: UnverifiableDepCause, spec: string):
  * other error, so a genuine failure is untouched.
  */
 export function unverifiableDepReason(error: string | undefined): string | null {
-  if (!error || !error.startsWith(UNVERIFIABLE_DEP_MARKER)) {
+  if (!error?.startsWith(UNVERIFIABLE_DEP_MARKER)) {
     return null
   }
   const rest = error.slice(UNVERIFIABLE_DEP_MARKER.length)

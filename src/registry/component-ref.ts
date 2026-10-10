@@ -24,7 +24,7 @@
 // This module is taken by the SERVER bundle too (server/index.ts imports it by
 // deep path, not through src/registry's barrel, so the barrel's client-only
 // siblings stay out of that bundle). It must stay host-free — no DOM, no
-// React, no `@ext/host` — because anything added here follows into a bundle
+// React, no `@opencroft/client` — because anything added here follows into a bundle
 // that has none of them.
 
 export interface ComponentRef {

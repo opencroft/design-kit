@@ -1,7 +1,6 @@
-import { React } from '@ext/host'
 import { Editor, loader, type OnMount } from '@monaco-editor/react'
-
-import { CodeBlockEditor } from '@opencroft/client'
+import { CodeBlockEditor } from '@opencroft/client/code'
+import { useEffect, useRef, useState } from 'react'
 
 // ── Where Monaco's runtime comes from. THIS IS THE SWITCH POINT. ──────────
 //
@@ -22,6 +21,33 @@ import { CodeBlockEditor } from '@opencroft/client'
 // safe at module scope, and it has to run before anything calls `init`.
 const MONACO_VS = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs'
 loader.config({ paths: { vs: MONACO_VS } })
+
+let fontsWatched = false
+
+/** The loader's `init`, which every editor here waits on before it renders.
+ *  It also re-measures fonts: Monaco measures a face's character widths once
+ *  and caches them, and the code face is a web font the host page fetches only
+ *  when text first needs it. An editor that mounted before it arrived would
+ *  keep placing the cursor and selection by the fallback's widths. This
+ *  Monaco is this extension's own runtime, not the host's, so the host's
+ *  re-measuring does not reach it. */
+export function initMonaco() {
+  return loader.init().then((monaco) => {
+    if (!fontsWatched) {
+      fontsWatched = true
+      document.fonts.addEventListener('loadingdone', () => monaco.editor.remeasureFonts())
+    }
+    return monaco
+  })
+}
+
+/** Monaco's own default face differs per OS (Consolas, Menlo, Droid Sans
+ *  Mono); the host page's code face is its `--font-mono` theme variable. Read
+ *  only while an editor renders, which is after `initMonaco` and so in a
+ *  browser. */
+export function monoFontFamily(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim() || 'monospace'
+}
 
 // Monaco infers a language from the model's URI, and every file here is named,
 // so the only ones worth stating are those whose extension it would otherwise
@@ -76,13 +102,12 @@ export interface MonacoCodeEditorProps {
 }
 
 export function MonacoCodeEditor({ path, value, onChange }: MonacoCodeEditorProps) {
-  const [state, setState] = React.useState<LoadState>('loading')
-  const editorRef = React.useRef<Parameters<OnMount>[0] | null>(null)
+  const [state, setState] = useState<LoadState>('loading')
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
 
-  React.useEffect(() => {
+  useEffect(() => {
     let live = true
-    loader
-      .init()
+    initMonaco()
       .then(() => {
         if (live) {
           setState('ready')
@@ -106,9 +131,9 @@ export function MonacoCodeEditor({ path, value, onChange }: MonacoCodeEditorProp
   // Pushing on every prop change would mean `model.setValue` on every render
   // that carries a new string, and setValue resets the cursor — the editor
   // being told text it already has.
-  const emitted = React.useRef(value)
+  const emitted = useRef(value)
 
-  React.useEffect(() => {
+  useEffect(() => {
     const ed = editorRef.current
     if (!ed || value === emitted.current) {
       return
@@ -164,7 +189,7 @@ export function MonacoCodeEditor({ path, value, onChange }: MonacoCodeEditorProp
       path={path}
       defaultValue={value}
       defaultLanguage={languageFor(path)}
-      options={OPTIONS}
+      options={{ ...OPTIONS, fontFamily: monoFontFamily() }}
       onMount={handleMount}
       onChange={(next) => {
         const text = next ?? ''

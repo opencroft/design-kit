@@ -1,7 +1,7 @@
-import { icons, React } from '@ext/host'
-import { ScrollArea } from '@ext/ui'
-
+import { ScrollArea } from '@opencroft/client/ui'
 import { cn } from 'cn'
+import { ChevronDown } from 'lucide-react'
+import { type ReactNode, useState } from 'react'
 
 // The Design Kit page shell — a pinned project header over the component tree,
 // beside the selected component's page.
@@ -24,7 +24,7 @@ import { cn } from 'cn'
 // provides; `minHeight` is the floor for a pane shorter than the layout.
 
 // Base UI's ScrollArea.Content -- the one wrapper inside the viewport, the
-// `[data-slot=scroll-area-content]` @ext/ui's ScrollArea draws -- carries an
+// `[data-slot=scroll-area-content]` the ui ScrollArea draws -- carries an
 // INLINE `min-width: fit-content` (it is how Base UI lets content scroll
 // sideways). That makes the wrapper at least as wide as its widest unbreakable
 // line, which silently defeats every `truncate` and `min-w-0` below it: a long
@@ -41,31 +41,31 @@ const CONTENT_FIT = '[&>[data-slot=scroll-area-viewport]>[data-slot=scroll-area-
 // which is `position: absolute`: without clipping, rows scrolled far down
 // place those spans below the root, and they stretch the PAGE; plain rows add
 // nothing. `overflow: hidden` on the roots contains them. shadcn's own
-// ScrollArea clips its root for this reason; the one @ext/ui exports does not.
+// ScrollArea clips its root for this reason; the one the ui package exports
+// does not.
 const CLIP = 'overflow-hidden'
 
 export interface LibraryShellProps {
   /** Which project this is, plus its project-level controls. Pinned — it does not scroll. */
-  header: React.ReactNode
+  header: ReactNode
   /** The component tree. */
-  tree?: React.ReactNode
+  tree?: ReactNode
   /** Stacked layout: what the folded tree says — normally the open component's title. */
   treeLabel?: string
   /** Stacked layout: whether the tree is unfolded. Uncontrolled when omitted. */
   treeOpen?: boolean
   onTreeOpenChange?: (open: boolean) => void
   /** The component's page: its documentation, an empty state, or a refusal. */
-  children: React.ReactNode
+  children: ReactNode
 }
 
 export function LibraryShell({ header, tree, treeLabel, treeOpen, onTreeOpenChange, children }: LibraryShellProps) {
-  const [ownOpen, setOwnOpen] = React.useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
   const open = treeOpen ?? ownOpen
   const setOpen = (next: boolean) => {
     setOwnOpen(next)
     onTreeOpenChange?.(next)
   }
-  const ChevronDown = icons.ChevronDown
 
   return (
     <div className='@container flex h-full min-h-0 w-full flex-col' style={{ minHeight: 420 }}>
@@ -84,13 +84,18 @@ export function LibraryShell({ header, tree, treeLabel, treeOpen, onTreeOpenChan
               className='flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50'
             >
               <span className='min-w-0 flex-1 truncate font-medium'>{treeLabel ?? 'Components'}</span>
-              <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
+              <ChevronDown
+                className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
+              />
             </button>
             {/* The cap goes on the viewport, not the root: the viewport is
                 `height: 100%`, which against an auto-height root resolves to
                 its content, so a cap on the root would clip nothing. */}
             {open && (
-              <ScrollArea className={cn('border-t', CLIP, CONTENT_FIT, '[&>[data-slot=scroll-area-viewport]]:max-h-72')} innerClassName='p-2'>
+              <ScrollArea
+                className={cn('border-t', CLIP, CONTENT_FIT, '[&>[data-slot=scroll-area-viewport]]:max-h-72')}
+                innerClassName='p-2'
+              >
                 {tree}
               </ScrollArea>
             )}
@@ -108,7 +113,10 @@ export function LibraryShell({ header, tree, treeLabel, treeOpen, onTreeOpenChan
           )}
         </aside>
         <main className='relative w-full min-w-0 @[560px]:min-h-0'>
-          <ScrollArea className={cn('min-h-0 flex-1 @[560px]:h-full', CLIP, CONTENT_FIT)} innerClassName='@[560px]:py-6 @[560px]:pr-6 @[560px]:pl-2'>
+          <ScrollArea
+            className={cn('min-h-0 flex-1 @[560px]:h-full', CLIP, CONTENT_FIT)}
+            innerClassName='@[560px]:py-6 @[560px]:pr-6 @[560px]:pl-2'
+          >
             {children}
           </ScrollArea>
         </main>

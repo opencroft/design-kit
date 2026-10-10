@@ -1,4 +1,6 @@
-import { AppLink, CodeBlock, MermaidDiagram, useAppHref } from '@opencroft/client'
+import { AppLink, useAppHref } from '@opencroft/client/app'
+import { CodeBlock } from '@opencroft/client/code'
+import { MermaidDiagram } from '@opencroft/client/markdown'
 import type { ComponentProps } from 'react'
 import type { Components, ExtraProps } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'

@@ -1,4 +1,4 @@
-import { React } from '@ext/host'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { PREVIEW_CHANNEL } from '../../preview-runtime/protocol'
 import { standalonePreviewUrl, useHostDark } from './preview-frame'
@@ -15,22 +15,39 @@ import { standalonePreviewUrl, useHostDark } from './preview-frame'
 // data route resolves the name against the component's own doc and refuses one
 // it does not document, and the frame shows that refusal.
 
-export function ComponentPreviewPage({ projectId, component, target }: { projectId: string; component: string; target: string | null }) {
+export function ComponentPreviewPage({
+  projectId,
+  component,
+  target,
+}: {
+  projectId: string
+  component: string
+  target: string | null
+}) {
   const dark = useHostDark()
-  const iframeRef = React.useRef<HTMLIFrameElement>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
   // Themed at load from the query, as the embedded frame is; a later toggle
   // goes over postMessage so that it does not reload the page. The theme is
   // read at the moment the address changes, not kept as a dependency.
-  const src = React.useMemo(
-    () => standalonePreviewUrl(projectId, component, document.documentElement.classList.contains('dark'), target ?? undefined),
+  const src = useMemo(
+    () =>
+      standalonePreviewUrl(
+        projectId,
+        component,
+        document.documentElement.classList.contains('dark'),
+        target ?? undefined,
+      ),
     [projectId, component, target],
   )
 
-  const postDark = React.useCallback(() => {
-    iframeRef.current?.contentWindow?.postMessage({ channel: PREVIEW_CHANNEL, type: 'dark', dark }, window.location.origin)
+  const postDark = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage(
+      { channel: PREVIEW_CHANNEL, type: 'dark', dark },
+      window.location.origin,
+    )
   }, [dark])
 
-  React.useEffect(() => {
+  useEffect(() => {
     postDark()
   }, [postDark])
 

@@ -3,7 +3,7 @@ import { transform } from 'sucrase'
 import { declaredRanges, type ModuleResolver, moduleSource, type NpmModule, npmModuleKey } from './declared-deps'
 import type { PoolGroup } from './protocol'
 
-// The eval engine that runs INSIDE the preview iframe. Host-free: no @ext/host
+// The eval engine that runs INSIDE the preview iframe. Host-free: no @opencroft/*
 // imports — React and the base scope are injected by the caller (entry.tsx),
 // so this module can be bundled for the isolated preview document.
 //
@@ -158,7 +158,9 @@ export function toRenderableSource(source: string): string {
 // Value (not type) symbols a module exports — used to return all exports.
 export function exportedValueNames(source: string): string[] {
   const names = new Set<string>()
-  for (const m of source.matchAll(/^[ \t]*export\s+(?:async\s+)?(?:function|const|let|var|class)\s+([A-Za-z0-9_$]+)/gm)) {
+  for (const m of source.matchAll(
+    /^[ \t]*export\s+(?:async\s+)?(?:function|const|let|var|class)\s+([A-Za-z0-9_$]+)/gm,
+  )) {
     names.add(m[1])
   }
   for (const m of source.matchAll(/^[ \t]*export\s*\{([^}]*)\}(?!\s*from)/gm)) {
@@ -194,8 +196,16 @@ export interface EvalCore {
     resolve?: Resolver,
     modules?: ModuleResolver,
   ): { exports: Record<string, unknown>; error: string | null; unresolved: string[] }
-  evaluateSnippet(source: string, resolve?: Resolver, modules?: ModuleResolver): { element: unknown; error: string | null; unresolved: string[] }
-  evalDefaultExport(source: string, resolve?: Resolver, modules?: ModuleResolver): { value: unknown; error: string | null; unresolved: string[] }
+  evaluateSnippet(
+    source: string,
+    resolve?: Resolver,
+    modules?: ModuleResolver,
+  ): { element: unknown; error: string | null; unresolved: string[] }
+  evalDefaultExport(
+    source: string,
+    resolve?: Resolver,
+    modules?: ModuleResolver,
+  ): { value: unknown; error: string | null; unresolved: string[] }
 }
 
 // A top-level `const`/`let`/`class` declaration cannot redeclare a `new
@@ -229,7 +239,8 @@ function declaredNames(code: string): Set<string> {
 
 export function createEvalCore({ React, baseScope }: EvalCoreOptions): EvalCore {
   // Names `new Function` cannot take as parameters.
-  const RESERVED = /^(default|let|const|var|class|function|return|import|export|new|this|typeof|in|of|if|else|for|while|do)$/
+  const RESERVED =
+    /^(default|let|const|var|class|function|return|import|export|new|this|typeof|in|of|if|else|for|while|do)$/
 
   function moduleValue(modules: ModuleResolver | undefined, module: string, imported: string): unknown {
     const exportsObj = modules?.(module)
@@ -252,7 +263,12 @@ export function createEvalCore({ React, baseScope }: EvalCoreOptions): EvalCore 
   // or a package the item does not declare.
   // Surfacing these by name turns an opaque React error #130 ("element type is
   // invalid") into an actionable message.
-  function buildScope(source: string, resolve?: Resolver, modules?: ModuleResolver, extra?: Record<string, unknown>): { scope: Record<string, unknown>; unresolved: string[] } {
+  function buildScope(
+    source: string,
+    resolve?: Resolver,
+    modules?: ModuleResolver,
+    extra?: Record<string, unknown>,
+  ): { scope: Record<string, unknown>; unresolved: string[] } {
     const scope: Record<string, unknown> = { React, ...baseScope }
     const unresolved = new Set<string>()
     for (const imp of parseImports(source)) {
@@ -278,7 +294,6 @@ export function createEvalCore({ React, baseScope }: EvalCoreOptions): EvalCore 
   function run(code: string, scope: Record<string, unknown>): unknown {
     const declared = declaredNames(code)
     const keys = Object.keys(scope).filter((k) => /^[A-Za-z_$][\w$]*$/.test(k) && !RESERVED.test(k) && !declared.has(k))
-    // eslint-disable-next-line no-new-func
     const fn = new Function(...keys, code)
     return fn(...keys.map((k) => scope[k]))
   }
@@ -309,7 +324,11 @@ export function createEvalCore({ React, baseScope }: EvalCoreOptions): EvalCore 
     }
   }
 
-  function evaluateSnippet(source: string, resolve?: Resolver, modules?: ModuleResolver): { element: unknown; error: string | null; unresolved: string[] } {
+  function evaluateSnippet(
+    source: string,
+    resolve?: Resolver,
+    modules?: ModuleResolver,
+  ): { element: unknown; error: string | null; unresolved: string[] } {
     const { scope, unresolved } = buildScope(source, resolve, modules, { render: () => {} })
     try {
       const renderable = toRenderableSource(source)
@@ -325,7 +344,11 @@ export function createEvalCore({ React, baseScope }: EvalCoreOptions): EvalCore 
     }
   }
 
-  function evalDefaultExport(source: string, resolve?: Resolver, modules?: ModuleResolver): { value: unknown; error: string | null; unresolved: string[] } {
+  function evalDefaultExport(
+    source: string,
+    resolve?: Resolver,
+    modules?: ModuleResolver,
+  ): { value: unknown; error: string | null; unresolved: string[] } {
     const { scope, unresolved } = buildScope(source, resolve, modules)
     try {
       const body = stripImports(source).replace(/^[ \t]*export\s+default\s+/m, 'return ')

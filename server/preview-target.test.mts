@@ -75,7 +75,11 @@ test('a name the document does not offer is refused, with what it does offer', (
   const result = resolvePreviewTarget(MDX, DOCS, 'example:examples/nope.tsx')
   assert.ok(!isResolved(result))
   assert.match(result.error, /No documented preview named/)
-  assert.deepEqual(result.available, ['preview:preview.tsx', 'example:examples/with-icon.tsx', 'example:examples/disabled.tsx'])
+  assert.deepEqual(result.available, [
+    'preview:preview.tsx',
+    'example:examples/with-icon.tsx',
+    'example:examples/disabled.tsx',
+  ])
 })
 
 test('a sheet is not addressable — it has no source of its own to open', () => {
@@ -98,7 +102,11 @@ test('a target whose file is gone says which file, and is not an empty render', 
 })
 
 test('targets are named the way the validator names them', () => {
-  assert.deepEqual(docTargets(MDX), ['preview:preview.tsx', 'example:examples/with-icon.tsx', 'example:examples/disabled.tsx'])
+  assert.deepEqual(docTargets(MDX), [
+    'preview:preview.tsx',
+    'example:examples/with-icon.tsx',
+    'example:examples/disabled.tsx',
+  ])
 })
 
 test('docFilesOf keys by docs-relative path and keeps the component source out', () => {

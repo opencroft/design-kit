@@ -1,6 +1,5 @@
-import type { MouseEvent } from 'react'
-
 import { cn } from 'cn'
+import type { MouseEvent } from 'react'
 
 export interface ComponentTreeItemProps {
   // The component's display title.
@@ -32,7 +31,9 @@ export function ComponentTreeItem({ label, draft, active = false, href, onSelect
   const draftTitle = draft === 'unpublished' ? 'Draft — never published' : `Draft ahead of the published v${draft}`
   const className = cn(
     'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors',
-    active ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+    active
+      ? 'bg-accent font-medium text-accent-foreground'
+      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
   )
   const content = (
     <>

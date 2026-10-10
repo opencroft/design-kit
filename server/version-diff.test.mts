@@ -39,13 +39,17 @@ test('an unchanged file carries NO content, and that is not the same as the file
   // The three states, side by side in one result. Collapsing any two of them is
   // the failure this test exists for: "not carried" is a transport decision,
   // "null" is a fact about the version, and "" is a fact about the file.
-  const rows = compareFileSets([file('same.tsx', 'x'), file('empty.tsx', '')], [file('same.tsx', 'x'), file('empty.tsx', ''), file('added.tsx', 'new')])
+  const rows = compareFileSets(
+    [file('same.tsx', 'x'), file('empty.tsx', '')],
+    [file('same.tsx', 'x'), file('empty.tsx', ''), file('added.tsx', 'new')],
+  )
 
   const unchanged = rows.find((r) => r.target === 'same.tsx')
   assert.equal(unchanged?.change, 'unchanged')
   assert.equal(unchanged?.before, undefined)
   assert.equal(unchanged?.after, undefined)
-  assert.equal('before' in unchanged!, false)
+  assert.ok(unchanged)
+  assert.equal('before' in unchanged, false)
 
   const added = rows.find((r) => r.target === 'added.tsx')
   assert.equal(added?.before, null)

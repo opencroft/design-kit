@@ -7,7 +7,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { EXAMPLE_FRAME_PRESETS, type ExampleFrameWidth, frameTracks, isBounded, isMobileWidth, MOBILE_BREAKPOINT, presetOf } from './example-frame-width.ts'
+import {
+  EXAMPLE_FRAME_PRESETS,
+  type ExampleFrameWidth,
+  frameTracks,
+  isBounded,
+  isMobileWidth,
+  MOBILE_BREAKPOINT,
+  presetOf,
+} from './example-frame-width.ts'
 
 const preset = (id: string) => {
   const hit = EXAMPLE_FRAME_PRESETS.find((p) => p.id === id)

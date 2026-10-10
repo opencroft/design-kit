@@ -1,15 +1,20 @@
-import { icons, invoke, React, toast } from '@ext/host'
-import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@ext/ui'
-import { callAppAction } from '@opencroft/client'
+import { callAppAction } from '@opencroft/client/actions'
+import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@opencroft/client/ui'
+import { Code, Eye, List, PanelRight, PanelRightClose, SaveOff } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
-import { MonacoCodeEditor } from './monaco-code-editor'
+import { invoke } from '../invoke'
 import { MiddleTruncate } from './middle-truncate'
+import { MonacoCodeEditor } from './monaco-code-editor'
 import { PanelTabStrip } from './panel-tab-strip'
 import { standalonePreviewUrl, useHostDark } from './preview-frame'
+import { movedSince, type PublishBase, publishBaseOf } from './publish-base'
+import { nextPublishStep } from './publish-queue'
 import { SourceEditorDiscard } from './source-editor-discard'
 import { type EditorFileRow, SourceEditorFiles } from './source-editor-files'
 import { SourceEditorGuard } from './source-editor-guard'
-import { SourceEditorHeader, type PublishState } from './source-editor-header'
+import { type PublishState, SourceEditorHeader } from './source-editor-header'
 import { type PublishErrorInfo, SourceEditorPublishError } from './source-editor-publish-error'
 import { SourceEditorStaleness, type StalenessInfo } from './source-editor-staleness'
 import { type CheckMoment, type CheckResult, SourceEditorValidation } from './source-editor-validation'
@@ -25,8 +30,6 @@ import { type CheckMoment, type CheckResult, SourceEditorValidation } from './so
 // family. Three levels, never conflated: the BUFFER lives here and is lost by
 // leaving (the guard's whole jurisdiction); the DRAFT persists via Save; the
 // PUBLISHED copy moves only via Publish.
-const { Code, Eye, List, PanelRight, PanelRightClose, SaveOff } = icons
-
 interface StoredFileData {
   path: string
   target: string
@@ -44,13 +47,6 @@ interface ValidationTargets {
 interface LastValidation {
   ok: boolean
   failed: ValidationTargets['targets']
-}
-
-/** The published version the open draft was built on, and when it was
- *  published. Held apart from `record` rather than read off it — see `load`. */
-interface PublishBase {
-  version: number
-  publishedAt: number
 }
 
 /** How long the typing has to stop before the draft takes it. Long enough that
@@ -131,53 +127,59 @@ function fileForTarget(target: string, sourcePaths: string[]): string | undefine
 export function SourceEditorPage({ projectId, componentName, draft, onExit }: SourceEditorPageProps) {
   const dark = useHostDark()
 
-  const [record, setRecord] = React.useState<ComponentRecord | null>(null)
-  const [base, setBase] = React.useState<PublishBase | null>(null)
-  const [loading, setLoading] = React.useState(true)
+  const [record, setRecord] = useState<ComponentRecord | null>(null)
+  const [base, setBase] = useState<PublishBase | null>(null)
+  const [loading, setLoading] = useState(true)
   // Only touched files live here; everything else reads from the record.
-  const [edits, setEdits] = React.useState<Record<string, string>>({})
-  const [activePath, setActivePath] = React.useState<string>('')
-  const [publish, setPublish] = React.useState<PublishState>('idle')
-  const [saving, setSaving] = React.useState(false)
-  const [validation, setValidation] = React.useState<CheckResult[] | null>(null)
-  const [validationMoment, setValidationMoment] = React.useState<CheckMoment>('draft')
-  const [publishError, setPublishError] = React.useState<PublishErrorInfo | null>(null)
+  const [edits, setEdits] = useState<Record<string, string>>({})
+  const [activePath, setActivePath] = useState<string>('')
+  const [publish, setPublish] = useState<PublishState>('idle')
+  /** Publish was pressed and is waiting for the typing to reach the draft. */
+  const [publishQueued, setPublishQueued] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [validation, setValidation] = useState<CheckResult[] | null>(null)
+  const [validationMoment, setValidationMoment] = useState<CheckMoment>('draft')
+  const [publishError, setPublishError] = useState<PublishErrorInfo | null>(null)
   /** What the last save said when it failed, kept until a save succeeds. This
    *  is the only state in which typed work exists nowhere but this tab. */
-  const [saveError, setSaveError] = React.useState<string | null>(null)
-  const [staleness, setStaleness] = React.useState<StalenessInfo | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [staleness, setStaleness] = useState<StalenessInfo | null>(null)
   /** The files that were yours at the moment Reload latest was pressed. Held
    *  from then on so the panel's promise can be kept: after a reload the draft
    *  differs from the newer published version in two ways at once — the files
    *  you changed, and the files somebody else changed that you are now behind
    *  on — and only the first set is anybody's to settle. */
-  const [keptPaths, setKeptPaths] = React.useState<ReadonlySet<string>>(() => new Set<string>())
-  const [guardOpen, setGuardOpen] = React.useState(false)
+  const [keptPaths, setKeptPaths] = useState<ReadonlySet<string>>(() => new Set<string>())
+  const [guardOpen, setGuardOpen] = useState(false)
   // Two states, not one: whether the question is on screen, and whether the
   // answer is being carried out. A single flag would make the dialog reappear
   // under the spinner it started.
-  const [discardOpen, setDiscardOpen] = React.useState(false)
-  const [discarding, setDiscarding] = React.useState(false)
-  const [previewNonce, setPreviewNonce] = React.useState(0)
-  const [previewOpen, setPreviewOpen] = React.useState(true)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [discarding, setDiscarding] = useState(false)
+  const [previewNonce, setPreviewNonce] = useState(0)
+  const [previewOpen, setPreviewOpen] = useState(true)
   // Which pane shows below the wide breakpoint. It opens on the files: on a
   // narrow surface, arriving at an empty editor pane asks the reader to go
   // looking for the list. The active path is local state that is always empty
   // on the first render, so the question has a single answer and a condition
   // would be a branch nothing can take. Choosing a file moves to the code pane,
   // which is where `'code'` is reached from.
-  const [tab, setTab] = React.useState<'files' | 'code' | 'preview'>('files')
-  const [creating, setCreating] = React.useState(false)
-  const [renamingPath, setRenamingPath] = React.useState<string | undefined>()
-  const [pendingDeletePath, setPendingDeletePath] = React.useState<string | undefined>()
+  const [tab, setTab] = useState<'files' | 'code' | 'preview'>('files')
+  const [creating, setCreating] = useState(false)
+  const [renamingPath, setRenamingPath] = useState<string | undefined>()
+  const [pendingDeletePath, setPendingDeletePath] = useState<string | undefined>()
 
-  const files = React.useMemo(() => record?.files ?? [], [record])
-  const dirtyPaths = React.useMemo(
-    () => files.filter((f) => edits[fileKey(f)] !== undefined && edits[fileKey(f)] !== f.content).map((f) => fileKey(f)),
+  const files = useMemo(() => record?.files ?? [], [record])
+  const dirtyPaths = useMemo(
+    () =>
+      files.filter((f) => edits[fileKey(f)] !== undefined && edits[fileKey(f)] !== f.content).map((f) => fileKey(f)),
     [files, edits],
   )
   const dirty = dirtyPaths.length > 0
-  const failedFiles = React.useMemo(() => new Set((validation ?? []).filter((v) => v.outcome === 'error' && v.file).map((v) => v.file as string)), [validation])
+  const failedFiles = useMemo(
+    () => new Set((validation ?? []).filter((v) => v.outcome === 'error' && v.file).map((v) => v.file as string)),
+    [validation],
+  )
 
   // Re-reads the component. `rebase` says whether this read also becomes the
   // published version the draft is considered to be built on — which is a
@@ -188,19 +190,19 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
   // precedes a publish, which is the case the staleness check exists for. The
   // base moves only where the editor deliberately re-bases: opening a
   // component, Reload latest, and a publish of its own.
-  const load = React.useCallback(
+  const load = useCallback(
     async ({ rebase = false }: { rebase?: boolean } = {}): Promise<ComponentRecord | null> => {
       const rec = await invoke<ComponentRecord | null>('components.get', { projectId, name: componentName })
       setRecord(rec)
       if (rebase) {
-        setBase(rec ? { version: rec.version ?? 1, publishedAt: rec.publishedAt ?? 0 } : null)
+        setBase(rec ? publishBaseOf(rec) : null)
       }
       return rec
     },
     [projectId, componentName],
   )
 
-  React.useEffect(() => {
+  useEffect(() => {
     let active = true
     setLoading(true)
     // Nothing has been reconciled in a component nobody has opened yet, and a
@@ -231,7 +233,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
   // save FAILED to store. A save merely waiting out the pause is not worth a
   // prompt — the window is under a second, and a browser dialog for it would
   // fire constantly and teach people to click through the one that matters.
-  React.useEffect(() => {
+  useEffect(() => {
     if (!saveError) {
       return
     }
@@ -242,7 +244,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
     return () => window.removeEventListener('beforeunload', warn)
   }, [saveError])
 
-  const applyValidation = React.useCallback(
+  const applyValidation = useCallback(
     (v: ValidationTargets | undefined, moment: CheckMoment = 'draft') => {
       if (!v?.targets) {
         setValidation(null)
@@ -254,7 +256,11 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
         .map((t) => ({
           target: t.target,
           outcome: t.outcome === 'error' ? 'error' : 'unverifiable',
-          message: t.error ?? (t.unresolvedImports?.length ? `Unresolved imports: ${t.unresolvedImports.join(', ')}` : 'Could not be checked.'),
+          message:
+            t.error ??
+            (t.unresolvedImports?.length
+              ? `Unresolved imports: ${t.unresolvedImports.join(', ')}`
+              : 'Could not be checked.'),
           file: fileForTarget(t.target, sourcePaths),
         }))
       setValidation(results.length > 0 ? results : null)
@@ -263,7 +269,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
     [files],
   )
 
-  const save = React.useCallback(async (): Promise<boolean> => {
+  const save = useCallback(async (): Promise<boolean> => {
     if (!record || dirtyPaths.length === 0) {
       // Nothing left to store, so nothing is at risk — a bar still standing
       // from an earlier failure would be reporting a state that has gone.
@@ -328,8 +334,8 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
   // Held in a ref because `save` is rebuilt on every keystroke — it closes over
   // the buffer — so a timer that depended on it would be cleared and restarted
   // by the very typing it is waiting out, and would never fire.
-  const saveRef = React.useRef(save)
-  React.useEffect(() => {
+  const saveRef = useRef(save)
+  useEffect(() => {
     saveRef.current = save
   })
 
@@ -342,7 +348,13 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
   // instantly and forever against whatever is refusing it — and the bar it
   // raises would flicker rather than being read. The next attempt is the
   // reader's: Retry, or the next thing they type.
-  React.useEffect(() => {
+  //
+  // `edits` is listed without being read: each keystroke changes it, and the
+  // re-run that causes clears the pending timer and starts a new one. That
+  // restart is the pause. Without it the save would fire a fixed time after
+  // the first keystroke, in the middle of whatever is being typed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `edits` restarts the autosave timer on every keystroke
+  useEffect(() => {
     if (!dirty || saving || saveError) {
       return
     }
@@ -367,9 +379,9 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
   // three differs from the one before it and the revert reloads like any other
   // change. Comparing against the opening value is what would break, which is
   // the version to not "simplify" this into.
-  const previewedAt = React.useRef<string | undefined>(undefined)
+  const previewedAt = useRef<string | undefined>(undefined)
   const draftAt = record?.state
-  React.useEffect(() => {
+  useEffect(() => {
     if (draftAt === undefined) {
       return
     }
@@ -394,7 +406,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
   // own. It is the reflex thirty years of editors trained, and a page that
   // ignores it, or lets the browser answer it with its own save-page dialog,
   // reads as broken. Here it means "now, rather than after the pause".
-  React.useEffect(() => {
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault()
@@ -407,7 +419,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
     return () => window.removeEventListener('keydown', onKey)
   }, [saving])
 
-  const doPublish = React.useCallback(async () => {
+  const doPublish = useCallback(async () => {
     if (!record) {
       return
     }
@@ -420,16 +432,18 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
     setPublishError(null)
     try {
       const fresh = await invoke<ComponentRecord | null>('components.get', { projectId, name: componentName })
+      if (!fresh) {
+        throw new Error(`Component "${componentName}" no longer exists.`)
+      }
+      const now = publishBaseOf(fresh)
       // No base means the opening read never completed, so nothing here was
-      // built on anything — v1 makes any real component look moved and the
-      // panel appears. Erring towards a question is the safe direction; erring
-      // towards agreement is how a publish goes missing.
-      const baseVersion = base?.version ?? 1
-      const freshVersion = fresh?.version ?? 1
-      if (fresh && (freshVersion !== baseVersion || (fresh.publishedAt ?? 0) !== (base?.publishedAt ?? 0))) {
+      // built on anything, and that is treated as moved: the panel appears.
+      // Erring towards a question is the safe direction; erring towards
+      // agreement is how a publish goes missing.
+      if (!base || movedSince(base, now)) {
         setStaleness({
-          publishedVersion: freshVersion,
-          baseVersion,
+          publishedVersion: now.version,
+          baseVersion: base?.version ?? 0,
           publishedAt: fresh.publishedAt ? new Date(fresh.publishedAt).toLocaleString() : 'an unknown time',
           // Passed straight through, absent and all: the panel decides what a
           // missing author reads as, and it is the only place that should.
@@ -454,10 +468,14 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
       }
       // An App action, so the host names the signed-in person as the caller
       // and the publish is committed under their name.
-      const res = await callAppAction<{ published: boolean; version: number; lastValidation?: LastValidation }>(projectId, 'publishComponent', {
-        name: componentName,
-        expectedVersion: baseVersion,
-      })
+      const res = await callAppAction<{ published: boolean; version: number; lastValidation?: LastValidation }>(
+        projectId,
+        'publishComponent',
+        {
+          name: componentName,
+          expectedVersion: base.version,
+        },
+      )
       if (res.published) {
         setPublish('done')
         // Publishing settles everything the reload left outstanding: what was
@@ -488,14 +506,44 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
       //
       // `base?.version` is what an installer still gets: the publish did not
       // happen, so the version this draft was built on is still the published
-      // one. It is absent only when the opening read never completed, and the
-      // panel's sentence then ends rather than guessing on its behalf.
+      // one. It is absent when the opening read never completed and 0 when
+      // nothing has been published, and in both the panel's sentence ends
+      // rather than naming a version an installer cannot get.
       setPublishError({ message: String(e), publishedVersion: base?.version })
       load().catch(() => {})
     }
   }, [record, base, projectId, componentName, publish, applyValidation, load])
 
-  const reloadLatest = React.useCallback(async () => {
+  // A press only queues; this carries it through once the draft holds what is
+  // on screen. It runs on every commit that changes one of its inputs, so a
+  // save landing, failing or being followed by more typing each move it on.
+  // `saveRef` is current here: the effect that refreshes it is declared above
+  // this one, and effects run in declaration order.
+  useEffect(() => {
+    if (!publishQueued) {
+      return
+    }
+    const step = nextPublishStep({ saving, saveFailed: saveError !== null, dirty })
+    if (step === 'wait') {
+      return
+    }
+    if (step === 'save') {
+      void saveRef.current()
+      return
+    }
+    setPublishQueued(false)
+    if (step === 'publish') {
+      void doPublish()
+    }
+  }, [publishQueued, saving, saveError, dirty, doPublish])
+
+  const requestPublish = useCallback(() => {
+    if (publish !== 'busy' && !discarding) {
+      setPublishQueued(true)
+    }
+  }, [publish, discarding])
+
+  const reloadLatest = useCallback(async () => {
     // Keeps `edits` as they are: files you had changed stay marked as changed
     // against the newer base — the buffer is kept, nothing is merged. It IS a
     // re-base, and the only one a person asks for by name: pressing it accepts
@@ -525,7 +573,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
     }
   }, [load, record])
 
-  const requestExit = React.useCallback(() => {
+  const requestExit = useCallback(() => {
     // Only a failure is worth asking about. A save that has simply not fired
     // yet is flushed on the way out — there is nothing to decide, and leaving
     // waits for the write rather than racing it.
@@ -544,7 +592,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
     onExit()
   }, [saveError, dirty, onExit])
 
-  const mutateFiles = React.useCallback(
+  const mutateFiles = useCallback(
     async (action: string, params: Record<string, unknown>, after?: (rec: ComponentRecord | null) => void) => {
       try {
         await invoke(action, { projectId, component: componentName, expectedState: record?.state, ...params })
@@ -571,7 +619,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
   // no longer hold what they were typed over, so keeping them would put the
   // discarded work straight back at the next autosave — the user would press
   // Discard and watch the draft return.
-  const doDiscard = React.useCallback(async () => {
+  const doDiscard = useCallback(async () => {
     setDiscardOpen(false)
     setDiscarding(true)
     try {
@@ -604,7 +652,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
   // changed. The header can still report unpublished work at the same time,
   // because a publish would spend a version either way — two true answers to
   // two different questions, and neither is a correction of the other.
-  const draftChangedPaths = React.useMemo(() => new Set(record?.draftFilesChanged ?? []), [record])
+  const draftChangedPaths = useMemo(() => new Set(record?.draftFilesChanged ?? []), [record])
 
   // Derived from the record, like the markers above it, and deliberately NOT
   // held as state.
@@ -657,8 +705,10 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
       onCancelCreate={() => setCreating(false)}
       onCreate={(path) => {
         setCreating(false)
-        mutateFiles('files.write', { files: [{ path, target: path, type: typeForNewPath(path), content: '' }], validate: false }, () =>
-          setActivePath(path),
+        mutateFiles(
+          'files.write',
+          { files: [{ path, target: path, type: typeForNewPath(path), content: '' }], validate: false },
+          () => setActivePath(path),
         )
       }}
       renamingPath={renamingPath}
@@ -767,29 +817,23 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
 
   return (
     <div className='@container relative flex h-full min-h-0 w-full flex-col overflow-hidden'>
-      {/* `version` below is the header's own display and keeps its substitute —
-          the one place where a version is invented for a component that
-          has none. Making it honest changes what an unpublished component's
-          header LINE reads, since the line is built from separators that assume
-          a version stands first, and that is a decision about this header's
-          layout rather than about discard. `discardTarget` is the unsubstituted
-          value, and it is what the act is decided from. */}
+      {/* No version is invented here: a component never published reads as
+          that, and the header says so in words. Before the opening read lands,
+          a draft reported on entry is the only version known. */}
       <SourceEditorHeader
         componentName={componentName}
-        version={record?.version ?? 1}
+        version={record ? (record.version ?? null) : typeof draft === 'number' ? draft : null}
         draftAhead={draftAhead}
         discardTarget={discardTarget}
         dirtyCount={draftChangedPaths.size}
-        publish={publish}
+        // A queued press reads as publishing: from where the reader sits it
+        // has started, and the button must not look pressable a second time.
+        publish={publishQueued ? 'busy' : publish}
         discarding={discarding}
         onBack={requestExit}
-        onPublish={() => {
-          if (!saving && publish !== 'busy') {
-            void doPublish()
-          }
-        }}
+        onPublish={requestPublish}
         onDiscard={() => {
-          if (!saving && publish !== 'busy' && !discarding) {
+          if (!saving && publish !== 'busy' && !publishQueued && !discarding) {
             setDiscardOpen(true)
           }
         }}
@@ -874,11 +918,7 @@ export function SourceEditorPage({ projectId, componentName, draft, onExit }: So
           {publishError ? (
             <SourceEditorPublishError
               {...publishError}
-              onRetry={() => {
-                if (!saving && publish !== 'busy') {
-                  void doPublish()
-                }
-              }}
+              onRetry={requestPublish}
               onDismiss={() => setPublishError(null)}
             />
           ) : null}

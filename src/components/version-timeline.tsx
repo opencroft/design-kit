@@ -1,6 +1,6 @@
-import { React } from '@ext/host'
-
 import { cn } from 'cn'
+import { type KeyboardEvent, type PointerEvent, useCallback, useRef } from 'react'
+
 import type { TimelinePoint } from './version-selection'
 
 // A horizontal timeline over a component's published versions. A single handle
@@ -46,11 +46,11 @@ function percentFor(index: number, count: number): number {
 }
 
 export function VersionTimeline({ points, from, to, onChange }: VersionTimelineProps) {
-  const trackRef = React.useRef<HTMLDivElement | null>(null)
-  const dragging = React.useRef<Handle | null>(null)
+  const trackRef = useRef<HTMLDivElement | null>(null)
+  const dragging = useRef<Handle | null>(null)
   const count = points.length
 
-  const indexFromClientX = React.useCallback(
+  const indexFromClientX = useCallback(
     (clientX: number): number => {
       const track = trackRef.current
       if (!track || count < 2) {
@@ -66,7 +66,7 @@ export function VersionTimeline({ points, from, to, onChange }: VersionTimelineP
   // Moving one half past the other swaps them and hands the drag to the half
   // that is now under the pointer, so the handle keeps following the finger
   // instead of sticking at the crossing point.
-  const moveHandle = React.useCallback(
+  const moveHandle = useCallback(
     (handle: Handle, index: number) => {
       const next = handle === 'from' ? { from: index, to } : { from, to: index }
       if (next.from > next.to) {
@@ -79,28 +79,29 @@ export function VersionTimeline({ points, from, to, onChange }: VersionTimelineP
     [from, to, onChange],
   )
 
-  const onPointerDown = (handle: Handle) => (e: React.PointerEvent<HTMLButtonElement>) => {
+  const onPointerDown = (handle: Handle) => (e: PointerEvent<HTMLButtonElement>) => {
     dragging.current = handle
     e.currentTarget.setPointerCapture(e.pointerId)
   }
 
-  const onPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+  const onPointerMove = (e: PointerEvent<HTMLButtonElement>) => {
     if (!dragging.current) {
       return
     }
     moveHandle(dragging.current, indexFromClientX(e.clientX))
   }
 
-  const endDrag = (e: React.PointerEvent<HTMLButtonElement>) => {
+  const endDrag = (e: PointerEvent<HTMLButtonElement>) => {
     dragging.current = null
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId)
     }
   }
 
-  const onKeyDown = (handle: Handle) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
+  const onKeyDown = (handle: Handle) => (e: KeyboardEvent<HTMLButtonElement>) => {
     const current = handle === 'from' ? from : to
-    const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'Home' ? -count : e.key === 'End' ? count : 0
+    const step =
+      e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'Home' ? -count : e.key === 'End' ? count : 0
     if (step === 0) {
       return
     }

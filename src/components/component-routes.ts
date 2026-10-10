@@ -75,12 +75,22 @@ export function componentRouteOf(appPath: string): ComponentRoute {
  */
 export function inAppPath(href: string, base: string, origin: string): string | null {
   const local = href.startsWith(`${origin}/`) ? href.slice(origin.length) : href
-  const rest = local === base ? '/' : local.startsWith(`${base}/`) || local.startsWith(`${base}?`) ? local.slice(base.length) : null
+  const rest =
+    local === base
+      ? '/'
+      : local.startsWith(`${base}/`) || local.startsWith(`${base}?`)
+        ? local.slice(base.length)
+        : null
   if (rest === null || rest.includes('#')) {
     return null
   }
   const to = rest.startsWith('?') ? `/${rest}` : rest
-  return to.split('?')[0].split('/').some((part) => part === '.' || part === '..') ? null : to
+  return to
+    .split('?')[0]
+    .split('/')
+    .some((part) => part === '.' || part === '..')
+    ? null
+    : to
 }
 
 /** Whether the address opens the component in the source editor. */

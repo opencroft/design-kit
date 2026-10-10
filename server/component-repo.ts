@@ -1,4 +1,4 @@
-import host from '@ext/host'
+import { execFile, fs, path as nodePath } from '@opencroft/server/system'
 
 import { commitAs } from './commit-identity'
 import { porcelainPaths, stagedPathsIn } from './staged-paths'
@@ -7,7 +7,7 @@ import { porcelainPaths, stagedPathsIn } from './staged-paths'
 // dataDir, the same pattern the Documentation app uses. Layout-agnostic on
 // purpose — callers choose file paths and the per-component tag name; this
 // module only runs git and the working tree. Everything goes through
-// host.execFile('git') and host.fs, both available in actions AND raw route
+// execFile('git') and fs (@opencroft/server/system), both available in actions AND raw route
 // handlers, so the registry routes read through here too (no request context,
 // no materialised checkout).
 //
@@ -17,7 +17,7 @@ import { porcelainPaths, stagedPathsIn } from './staged-paths'
 // untagged publish detectable (a commit past a component's highest tag).
 
 async function git(dir: string, ...args: string[]): Promise<string> {
-  return host.execFile('git', ['-c', 'safe.directory=*', '-C', dir, ...args.filter((a) => a !== '')])
+  return execFile('git', ['-c', 'safe.directory=*', '-C', dir, ...args.filter((a) => a !== '')])
 }
 
 export function repoDir(instance: { dataDir: string }): string {
@@ -25,7 +25,7 @@ export function repoDir(instance: { dataDir: string }): string {
 }
 
 export async function isRepo(dir: string): Promise<boolean> {
-  return host.fs
+  return fs
     .access(`${dir}/.git`)
     .then(() => true)
     .catch(() => false)
@@ -39,14 +39,14 @@ export async function ensureRepo(dir: string): Promise<void> {
   if (await isRepo(dir)) {
     return
   }
-  await host.fs.mkdir(dir, { recursive: true })
+  await fs.mkdir(dir, { recursive: true })
   await git(dir, 'init', '-q', '-b', 'main')
 }
 
 // ── Draft (working tree) ──────────────────────────────────
 
 export async function readWorking(dir: string, path: string): Promise<string | null> {
-  return host.fs
+  return fs
     .readFile(`${dir}/${path}`, 'utf-8')
     .then((c: string) => c)
     .catch(() => null)
@@ -61,15 +61,15 @@ export async function readWorking(dir: string, path: string): Promise<string | n
  * convenience — a write left unstaged is a change neither of them can see.
  */
 export async function writeWorking(dir: string, path: string, content: string): Promise<void> {
-  await host.fs.mkdir(host.path.dirname(`${dir}/${path}`), { recursive: true })
-  await host.fs.writeFile(`${dir}/${path}`, content, 'utf-8')
+  await fs.mkdir(nodePath.dirname(`${dir}/${path}`), { recursive: true })
+  await fs.writeFile(`${dir}/${path}`, content, 'utf-8')
   await git(dir, 'add', '--', path)
 }
 
 export async function removeWorking(dir: string, path: string): Promise<void> {
   // Staged/tracked: `git rm`; untracked: unlink. --ignore-unmatch covers both.
   await git(dir, 'rm', '-f', '--ignore-unmatch', '--', path)
-  await host.fs.rm(`${dir}/${path}`).catch(() => {})
+  await fs.rm(`${dir}/${path}`).catch(() => {})
 }
 
 /**
@@ -90,7 +90,7 @@ export async function discardWorking(dir: string, path: string): Promise<void> {
     return
   }
   await git(dir, 'rm', '--cached', '--ignore-unmatch', '--', path).catch(() => {})
-  await host.fs.rm(`${dir}/${path}`).catch(() => {})
+  await fs.rm(`${dir}/${path}`).catch(() => {})
 }
 
 /** Paths with uncommitted changes — the draft-ahead set. */
@@ -134,7 +134,9 @@ export async function readHead(dir: string, path: string): Promise<string | null
 
 /** Every file path published at HEAD, optionally under a prefix. Empty before the first commit. */
 export async function listHead(dir: string, prefix = ''): Promise<string[]> {
-  const args = prefix ? ['ls-tree', '-r', '--name-only', 'HEAD', '--', prefix] : ['ls-tree', '-r', '--name-only', 'HEAD']
+  const args = prefix
+    ? ['ls-tree', '-r', '--name-only', 'HEAD', '--', prefix]
+    : ['ls-tree', '-r', '--name-only', 'HEAD']
   const out = await git(dir, ...args).catch(() => '')
   return out
     .split('\n')
@@ -165,13 +167,18 @@ export function componentTag(name: string, version: number): string {
  *
  * The commit is made under `author`'s name, with no email (`commitAs`).
  */
-export async function commitPaths(dir: string, message: string, paths: string[], author: string): Promise<string | null> {
+export async function commitPaths(
+  dir: string,
+  message: string,
+  paths: string[],
+  author: string,
+): Promise<string | null> {
   if (paths.length === 0) {
     return null
   }
   const existing: string[] = []
   for (const p of paths) {
-    const present = await host.fs
+    const present = await fs
       .access(`${dir}/${p}`)
       .then(() => true)
       .catch(() => false)
@@ -202,7 +209,12 @@ export async function commitPaths(dir: string, message: string, paths: string[],
  * commit refuses the WHOLE commit over one path unknown to git. Made under
  * `author`'s name, as commitPaths is.
  */
-export async function commitStagedRemovals(dir: string, message: string, paths: string[], author: string): Promise<string | null> {
+export async function commitStagedRemovals(
+  dir: string,
+  message: string,
+  paths: string[],
+  author: string,
+): Promise<string | null> {
   if (paths.length === 0) {
     return null
   }
@@ -218,7 +230,14 @@ export async function commitStagedRemovals(dir: string, message: string, paths: 
 /** Every path touched by a commit since the given ISO date (or `git log --since` expression). */
 export async function pathsChangedSince(dir: string, since: string): Promise<string[]> {
   const out = await git(dir, 'log', `--since=${since}`, '--name-only', '--pretty=format:').catch(() => '')
-  return [...new Set(out.split('\n').map((l) => l.trim()).filter(Boolean))]
+  return [
+    ...new Set(
+      out
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean),
+    ),
+  ]
 }
 
 /** Tracked + untracked (non-ignored) files in the working tree, optionally under a prefix. */
@@ -235,7 +254,11 @@ export async function listWorkingFiles(dir: string, prefix = ''): Promise<string
 }
 
 /** Regex search over the working tree (tracked + untracked), line-oriented. */
-export async function grepWorking(dir: string, pattern: string, flags = ''): Promise<Array<{ path: string; line: number; text: string }>> {
+export async function grepWorking(
+  dir: string,
+  pattern: string,
+  flags = '',
+): Promise<Array<{ path: string; line: number; text: string }>> {
   const args = ['grep', '-n', '--untracked', '-E']
   if (flags.includes('i')) {
     args.push('-i')
@@ -272,7 +295,10 @@ export async function highestVersion(dir: string, name: string): Promise<number>
 }
 
 /** A component's published versions, newest first: version, the commit it tags, its date and author. */
-export async function componentRevisions(dir: string, name: string): Promise<Array<{ version: number; sha: string; at: string; author: string }>> {
+export async function componentRevisions(
+  dir: string,
+  name: string,
+): Promise<Array<{ version: number; sha: string; at: string; author: string }>> {
   // NUL separators, because an author name contains spaces. A lightweight tag
   // points straight at its commit, so authorname is the commit's author — the
   // name the publish commit was made under.

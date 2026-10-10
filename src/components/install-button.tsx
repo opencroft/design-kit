@@ -1,11 +1,8 @@
-import { icons } from '@ext/host'
-import ui, { Button } from '@ext/ui'
-
-import { CodeBlock } from '@opencroft/client'
+import { CodeBlock } from '@opencroft/client/code'
+import { Button, Popover, PopoverContent, PopoverTrigger } from '@opencroft/client/ui'
+import { Terminal } from 'lucide-react'
 
 import { formatComponentRef } from '../registry'
-
-const { Popover, PopoverTrigger, PopoverContent } = ui as Record<string, React.ComponentType<Record<string, unknown>>>
 
 // Install affordance. Three ways to pull the component with the shadcn CLI:
 //   1. One-line install script — resolves the FULL cross-project dependency
@@ -27,7 +24,6 @@ export interface InstallButtonProps {
 }
 
 export function InstallButton({ name, namespace, httpUrl, defaultOpen }: InstallButtonProps) {
-  const Terminal = icons.Terminal
   const http = httpUrl.replace(/\/+$/, '')
   const ref = formatComponentRef(namespace, name)
   const installCmd = `npx "${http}/install?component=${ref}"`
@@ -49,15 +45,21 @@ export function InstallButton({ name, namespace, httpUrl, defaultOpen }: Install
       </PopoverTrigger>
       <PopoverContent align='end' className='w-[34rem] max-w-[90vw] p-3'>
         <div className='space-y-1.5'>
-          <div className='text-xs font-medium text-muted-foreground'>Install — resolves cross-project dependencies automatically</div>
+          <div className='text-xs font-medium text-muted-foreground'>
+            Install — resolves cross-project dependencies automatically
+          </div>
           <CodeBlock code={installCmd} language='bash' />
         </div>
         <div className='space-y-1.5'>
-          <div className='text-xs font-medium text-muted-foreground'>Direct URL — no config (only if this component has no design-kit dependencies)</div>
+          <div className='text-xs font-medium text-muted-foreground'>
+            Direct URL — no config (only if this component has no design-kit dependencies)
+          </div>
           <CodeBlock code={directCmd} language='bash' />
         </div>
         <div className='space-y-1.5'>
-          <div className='text-xs font-medium text-muted-foreground'>Or register once in components.json, then use the short name</div>
+          <div className='text-xs font-medium text-muted-foreground'>
+            Or register once in components.json, then use the short name
+          </div>
           <CodeBlock code={registrySnippet} language='json' />
           <CodeBlock code={namedCmd} language='bash' />
         </div>

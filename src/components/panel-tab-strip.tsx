@@ -1,7 +1,6 @@
-import { React } from '@ext/host'
-import { Separator } from '@ext/ui'
-
+import { Separator } from '@opencroft/client/ui'
 import { cn } from 'cn'
+import type { ComponentType } from 'react'
 
 // Follows the kit source (@opencroft/panel-tab-strip): the tab strip at the top
 // of a panel — an optional leading icon, a label, an optional count, and an
@@ -19,7 +18,7 @@ export interface PanelTab {
   label: string
   /** Optional leading icon. Any component taking a className — a lucide icon,
    *  or whatever the host resolves an extension's icon name to. */
-  icon?: React.ComponentType<{ className?: string }>
+  icon?: ComponentType<{ className?: string }>
   /** Optional trailing count. Hidden when absent or zero, so a tab that has
    *  nothing pending is not distinguished from one that cannot count. */
   count?: number
@@ -58,7 +57,9 @@ export function PanelTabStrip({ tabs, activeId, onSelect, separator = true, clas
               onClick={() => onSelect(tab.id)}
               className={cn(
                 'flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 py-1.5 text-xs font-medium transition-colors',
-                isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground/80',
+                isActive
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground/80',
               )}
             >
               {TabIcon ? <TabIcon className='size-3' /> : null}

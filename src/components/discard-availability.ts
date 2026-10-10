@@ -43,7 +43,10 @@ export interface DiscardAvailability {
  * never-published state as undefined, so a strict check would report it as
  * offerable.
  */
-export function discardAvailability(draftAhead: boolean, publishedVersion: number | null | undefined): DiscardAvailability {
+export function discardAvailability(
+  draftAhead: boolean,
+  publishedVersion: number | null | undefined,
+): DiscardAvailability {
   if (!draftAhead) {
     return { available: false, title: 'Nothing to discard' }
   }

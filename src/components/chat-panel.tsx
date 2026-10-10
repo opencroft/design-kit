@@ -1,20 +1,10 @@
-import host, { React } from '@ext/host'
+import { ChatDock as HostChatDock, SelectionProvider, useSelection } from '@opencroft/client/chat'
+import { type ReactNode, useEffect } from 'react'
 
-// Taken off the host object rather than as named imports: the shim exports a
-// fixed list of names plus the whole object as its default, and these are not
-// on that list. Read defensively so a host without them renders the dashboard
-// without the chat instead of failing to mount.
-//
 // The chat's whole chrome -- launcher, docking, floating window, mobile
 // cover -- is the host's ChatDock, the same surface the space canvas mounts.
 // The dashboard contributes only what is its own: the selection bridge and
 // which thread is its default.
-const HostChatDock = host?.ChatDock
-const SelectionProvider = host?.SelectionProvider
-const useSelection = host?.useSelection
-
-/** Whether this host can render the chat at all. */
-export const chatDockSupported = Boolean(HostChatDock && SelectionProvider && useSelection)
 
 export interface ChatSelection {
   label: string
@@ -29,7 +19,7 @@ interface ChatDockProps {
   /** What the reader currently has open, published into the scope. */
   selection: ChatSelection | null
   /** The surface the chat sits beside. */
-  children: React.ReactNode
+  children: ReactNode
 }
 
 // Publishes the host's current selection into the scope. Renders nothing -- it
@@ -39,7 +29,7 @@ function SelectionBridge({ selection }: { selection: ChatSelection | null }) {
   const { setSelection, clearSelection } = useSelection()
   const label = selection?.label ?? ''
   const content = selection?.content ?? ''
-  React.useEffect(() => {
+  useEffect(() => {
     if (!label) {
       clearSelection()
       return
@@ -62,13 +52,11 @@ function SelectionBridge({ selection }: { selection: ChatSelection | null }) {
  * provider and the selection goes with it, which is the mechanic's own
  * guarantee rather than something maintained here.
  *
- * Falls back to rendering `children` alone on a host that lacks the chat, so
- * this file is safe to mount unconditionally -- and without a project resolved
- * there is nothing to scope a conversation to, so no chat is offered until
- * one is.
+ * Without a project resolved there is nothing to scope a conversation to, so
+ * `children` render alone and no chat is offered until one is.
  */
 export function ChatDock({ space, threadId, selection, children }: ChatDockProps) {
-  if (!chatDockSupported || !space) {
+  if (!space) {
     return <>{children}</>
   }
 

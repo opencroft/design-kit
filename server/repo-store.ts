@@ -1,5 +1,14 @@
-import host from '@ext/host'
+import { fs } from '@opencroft/server/system'
 
+import {
+  componentPaths,
+  type DeclaredRecord,
+  declaredPath,
+  META_DIR,
+  metaPath,
+  ownedPaths,
+  storagePath,
+} from './component-paths'
 import {
   changedPaths,
   commitPaths,
@@ -8,12 +17,12 @@ import {
   componentTag,
   diffNames,
   discardWorking,
-  pathInHead,
   grepWorking,
-  highestVersion,
   headSha,
+  highestVersion,
   listHead,
   listWorkingFiles,
+  pathInHead,
   pathsChangedSince,
   readWorking,
   removeWorking,
@@ -22,12 +31,11 @@ import {
   tagVersion,
   writeWorking,
 } from './component-repo'
-import { componentPaths, type DeclaredRecord, declaredPath, META_DIR, metaPath, ownedPaths, storagePath } from './component-paths'
 import { stateToken } from './component-state'
 import { planDeletion } from './file-deletion'
 import { planMoves } from './file-moves'
-import { unreachableEndpointMessage, type VersionEndpoint } from './version-endpoint'
 import { compareFileSets, type FileComparison } from './version-diff'
+import { unreachableEndpointMessage, type VersionEndpoint } from './version-endpoint'
 
 // The component store, backed by one git repo per project (the App instance's
 // dataDir) instead of the KV store. The authoring view is the WORKING TREE
@@ -91,8 +99,8 @@ type StoredMeta = Omit<StoredComponent, 'files' | 'version' | 'publishedAt' | 's
 
 const THEME_PATH = 'theme.json'
 
-export { declaredPath, storagePath }
 export type { VersionEndpoint }
+export { declaredPath, storagePath }
 
 function newComponentId(): string {
   return `cp_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
@@ -146,7 +154,9 @@ async function assertFresh(dir: string, meta: StoredMeta, expectedState?: string
   }
   const current = await componentState(dir, meta)
   if (current !== expectedState) {
-    throw new Error(`Stale write: component "${meta.name}" changed since you read it (now ${current}, you read ${expectedState}). Re-read and retry.`)
+    throw new Error(
+      `Stale write: component "${meta.name}" changed since you read it (now ${current}, you read ${expectedState}). Re-read and retry.`,
+    )
   }
 }
 
@@ -164,13 +174,18 @@ async function listComponentNames(dir: string, ref?: string): Promise<string[]> 
       .filter((p) => p.startsWith(`${META_DIR}/`) && p.endsWith('.json'))
       .map((p) => p.slice(META_DIR.length + 1, -'.json'.length))
   }
-  const entries = await host.fs.readdir(`${dir}/${META_DIR}`, { withFileTypes: true }).catch(() => [])
+  const entries = await fs.readdir(`${dir}/${META_DIR}`, { withFileTypes: true }).catch(() => [])
   return entries
     .filter((e: { isFile?: () => boolean; name: string }) => e.name.endsWith('.json'))
     .map((e: { name: string }) => e.name.slice(0, -'.json'.length))
 }
 
-async function hydrate(dir: string, meta: StoredMeta, ref: string | undefined, version: number): Promise<StoredComponent> {
+async function hydrate(
+  dir: string,
+  meta: StoredMeta,
+  ref: string | undefined,
+  version: number,
+): Promise<StoredComponent> {
   const files: StoredFile[] = []
   for (const f of meta.files ?? []) {
     const content = (await readRaw(dir, storagePath(meta.name, f), ref)) ?? ''
@@ -282,7 +297,12 @@ export async function writeComponent(
   return hydrate(dir, meta, undefined, await highestVersion(dir, input.name))
 }
 
-export async function editComponent(dir: string, name: string, patch: Partial<StoredMeta>, expectedState?: string): Promise<StoredComponent> {
+export async function editComponent(
+  dir: string,
+  name: string,
+  patch: Partial<StoredMeta>,
+  expectedState?: string,
+): Promise<StoredComponent> {
   const meta = await readComponentMeta(dir, name)
   if (!meta) {
     throw new Error(`Component "${name}" does not exist.`)
@@ -311,7 +331,11 @@ export async function writeFiles(
     if (!target) {
       continue
     }
-    const entry = { path: f.path ?? target, target, type: f.type ?? meta.files.find((x) => x.target === target)?.type ?? 'registry:component' }
+    const entry = {
+      path: f.path ?? target,
+      target,
+      type: f.type ?? meta.files.find((x) => x.target === target)?.type ?? 'registry:component',
+    }
     // A shipped path belongs to one component. Two components shipping the
     // same install path is a GENUINE conflict — installing both into one
     // project would have one overwrite the other — so it surfaces here as
@@ -355,7 +379,9 @@ export async function editFiles(
       throw new Error(`editFiles: \`old\` not found in "${e.path}".`)
     }
     if (occurrences > 1 && !e.replaceAll) {
-      throw new Error(`editFiles: \`old\` is not unique in "${e.path}" (${occurrences} matches). Set replaceAll or add context.`)
+      throw new Error(
+        `editFiles: \`old\` is not unique in "${e.path}" (${occurrences} matches). Set replaceAll or add context.`,
+      )
     }
     next.set(where, e.replaceAll ? content.split(e.old).join(e.new) : content.replace(e.old, e.new))
   }
@@ -468,7 +494,12 @@ export async function renameComponent(dir: string, from: string, to: string): Pr
  * removed, and what is reported, which is what stops a file surviving with no
  * record pointing at it.
  */
-export async function deleteFiles(dir: string, name: string, paths: string[], expectedState?: string): Promise<{ deleted: string[]; missing: string[]; removedFiles: string[] }> {
+export async function deleteFiles(
+  dir: string,
+  name: string,
+  paths: string[],
+  expectedState?: string,
+): Promise<{ deleted: string[]; missing: string[]; removedFiles: string[] }> {
   const meta = await readComponentMeta(dir, name)
   if (!meta) {
     throw new Error(`Component "${name}" does not exist.`)
@@ -532,13 +563,22 @@ export async function readComponentsWithState(dir: string): Promise<StateCompone
     const revs = await componentRevisions(dir, c.name)
     const top = revs[0]
     const draft =
-      c.version === undefined ? ('unpublished' as const) : changedTargets.length > 0 || removedTargets.length > 0 || metaTouched ? c.version : undefined
+      c.version === undefined
+        ? ('unpublished' as const)
+        : changedTargets.length > 0 || removedTargets.length > 0 || metaTouched
+          ? c.version
+          : undefined
     out.push({
       ...c,
       publishedAt: top ? Date.parse(top.at) || undefined : undefined,
       publishedBy: top?.author ? { name: top.author } : undefined,
       draft,
-      draftFilesChanged: draft === undefined ? undefined : draft === 'unpublished' ? c.files.map((f) => f.target) : [...changedTargets, ...removedTargets],
+      draftFilesChanged:
+        draft === undefined
+          ? undefined
+          : draft === 'unpublished'
+            ? c.files.map((f) => f.target)
+            : [...changedTargets, ...removedTargets],
     })
   }
   return out
@@ -581,8 +621,12 @@ export async function fileOwners(dir: string): Promise<Map<string, string>> {
  * (ISO 8601 or epoch milliseconds). Time-based `changesSince` — the
  * version-based form is `changesSince(name, v)` with the tag floor.
  */
-export async function changedSinceDate(dir: string, since: string | number): Promise<Array<{ name: string; changed: string[] }>> {
-  const iso = typeof since === 'number' || /^\d+$/.test(String(since)) ? new Date(Number(since)).toISOString() : String(since)
+export async function changedSinceDate(
+  dir: string,
+  since: string | number,
+): Promise<Array<{ name: string; changed: string[] }>> {
+  const iso =
+    typeof since === 'number' || /^\d+$/.test(String(since)) ? new Date(Number(since)).toISOString() : String(since)
   const paths = new Set(await pathsChangedSince(dir, iso))
   if (paths.size === 0) {
     return []
@@ -603,12 +647,24 @@ export async function changedSinceDate(dir: string, since: string | number): Pro
 export async function globFiles(dir: string, pattern: string, prefix = ''): Promise<string[]> {
   const files = await listWorkingFiles(dir, prefix)
   const rx = new RegExp(
-    `^${pattern.split('**').map((part) => part.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')).join('.*')}$`,
+    `^${pattern
+      .split('**')
+      .map((part) =>
+        part
+          .split('*')
+          .map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+          .join('[^/]*'),
+      )
+      .join('.*')}$`,
   )
   return files.filter((f) => rx.test(f))
 }
 
-export async function grepFiles(dir: string, pattern: string, flags?: string): Promise<Array<{ path: string; line: number; text: string }>> {
+export async function grepFiles(
+  dir: string,
+  pattern: string,
+  flags?: string,
+): Promise<Array<{ path: string; line: number; text: string }>> {
   return grepWorking(dir, pattern, flags ?? '')
 }
 
@@ -726,7 +782,12 @@ export interface DeleteResult {
  *
  * The commit is made under `author`'s name.
  */
-export async function deleteComponent(dir: string, name: string, author: string, message = `Delete ${name}`): Promise<DeleteResult> {
+export async function deleteComponent(
+  dir: string,
+  name: string,
+  author: string,
+  message = `Delete ${name}`,
+): Promise<DeleteResult> {
   const meta = await readComponentMeta(dir, name)
   if (!meta) {
     return { deleted: false, name, committed: null }
@@ -755,7 +816,11 @@ export interface PublishResult {
 }
 
 /** Publish one component's draft, committed under `options.author`'s name. */
-export async function publishComponent(dir: string, name: string, options: { author: string; expectedVersion?: number }): Promise<PublishResult> {
+export async function publishComponent(
+  dir: string,
+  name: string,
+  options: { author: string; expectedVersion?: number },
+): Promise<PublishResult> {
   const meta = await readComponentMeta(dir, name)
   if (!meta) {
     throw new Error(`Component "${name}" does not exist.`)
@@ -810,14 +875,22 @@ async function componentPathsAt(dir: string, name: string, ref: string): Promise
  * what the component declared at both ends, so a file added, removed or
  * renamed across the pair is still covered.
  */
-async function changedBetween(dir: string, from: string, to: string, scopeFor: (ref: string) => Promise<string[]>): Promise<string[]> {
+async function changedBetween(
+  dir: string,
+  from: string,
+  to: string,
+  scopeFor: (ref: string) => Promise<string[]>,
+): Promise<string[]> {
   const scope = Array.from(new Set([...(await scopeFor(from)), ...(await scopeFor(to))]))
   // An empty pathspec diffs the WHOLE repo, which is the very failure above.
   // Declaring no files means there is nothing of this component's to report.
   return scope.length > 0 ? diffNames(dir, from, to, scope) : []
 }
 
-export async function listRevisions(dir: string, name: string): Promise<{ name: string; versions: RevisionRow[]; floor: number; draftAhead: boolean }> {
+export async function listRevisions(
+  dir: string,
+  name: string,
+): Promise<{ name: string; versions: RevisionRow[]; floor: number; draftAhead: boolean }> {
   const revs = await componentRevisions(dir, name)
   const pathCache = new Map<string, string[]>()
   const scopeFor = async (ref: string): Promise<string[]> => {
@@ -843,7 +916,11 @@ export async function listRevisions(dir: string, name: string): Promise<{ name: 
       author: r.author,
       // Reported as the component DECLARES them: a history entry is read by a
       // person, and the internal storage root is this layout's business.
-      changed: older ? (await changedBetween(dir, componentTag(name, older.version), tag, scopeFor)).map((p) => declaredPath(name, p)) : null,
+      changed: older
+        ? (await changedBetween(dir, componentTag(name, older.version), tag, scopeFor)).map((p) =>
+            declaredPath(name, p),
+          )
+        : null,
     })
   }
 
@@ -888,7 +965,11 @@ export async function changesSince(dir: string, name: string, since: number): Pr
     return { status: 'ahead', latest: top, message: `v${since} is ahead of the registry — latest is v${top}.` }
   }
   if (floor === 0 || since < floor) {
-    return { status: 'predatesHistory', floor, message: `cannot compare against v${since} — it predates this project's migrated history (earliest is v${floor || top}); install the current state.` }
+    return {
+      status: 'predatesHistory',
+      floor,
+      message: `cannot compare against v${since} — it predates this project's migrated history (earliest is v${floor || top}); install the current state.`,
+    }
   }
   const changed = await diffNames(dir, componentTag(name, since), 'HEAD')
   return { status: 'ok', changed, from: since, to: top }
@@ -935,7 +1016,11 @@ export async function readComponentDraftFiles(dir: string, name: string): Promis
 }
 
 /** A component's files at any one end of a comparison. */
-export async function readComponentAtEndpoint(dir: string, name: string, at: VersionEndpoint): Promise<VersionFiles | null> {
+export async function readComponentAtEndpoint(
+  dir: string,
+  name: string,
+  at: VersionEndpoint,
+): Promise<VersionFiles | null> {
   if (at === 'none') {
     return { name, at, files: [] }
   }
@@ -955,7 +1040,10 @@ export async function compareComponentVersions(
   from: VersionEndpoint,
   to: VersionEndpoint,
 ): Promise<{ component: string; from: VersionEndpoint; to: VersionEndpoint; files: FileComparison[] }> {
-  const [older, newer] = await Promise.all([readComponentAtEndpoint(dir, name, from), readComponentAtEndpoint(dir, name, to)])
+  const [older, newer] = await Promise.all([
+    readComponentAtEndpoint(dir, name, from),
+    readComponentAtEndpoint(dir, name, to),
+  ])
   if (!older || !newer) {
     // The versions actually held, so the refusal can say which ends WOULD work.
     // Read only on this path: it costs a git call, and a comparison that

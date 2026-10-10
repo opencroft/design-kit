@@ -15,7 +15,14 @@ function stored(over: Partial<StoredComponent> = {}): StoredComponent {
     category: 'display',
     description: '',
     dependencies: [],
-    files: [{ path: 'widget.tsx', target: 'components/ui/widget.tsx', type: 'registry:component', content: 'export const Widget = null' }],
+    files: [
+      {
+        path: 'widget.tsx',
+        target: 'components/ui/widget.tsx',
+        type: 'registry:component',
+        content: 'export const Widget = null',
+      },
+    ],
     exportName: 'Widget',
     ...over,
   }
@@ -50,13 +57,13 @@ test('a record with no registry dependencies yields an empty list, never undefin
 })
 
 test('every component in a project is built, each with its own dependencies', () => {
-  const items = buildRegistryItems([
-    stored({ name: 'a', registryDependencies: ['button'] }),
-    stored({ name: 'b' }),
-  ])
+  const items = buildRegistryItems([stored({ name: 'a', registryDependencies: ['button'] }), stored({ name: 'b' })])
 
   assert.deepEqual(
     items.map((i) => [i.name, i.registryDependencies]),
-    [['a', ['button']], ['b', []]],
+    [
+      ['a', ['button']],
+      ['b', []],
+    ],
   )
 })

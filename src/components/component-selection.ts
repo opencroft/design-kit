@@ -166,7 +166,9 @@ export function selectForAddress(
       return selectComponent(legacyRef, names, identities)
     case 'component':
     case 'preview':
-      return names.includes(route.name) ? { status: 'selected', name: route.name } : { status: 'missing', requested: route.name }
+      return names.includes(route.name)
+        ? { status: 'selected', name: route.name }
+        : { status: 'missing', requested: route.name }
     case 'unknown':
       return { status: 'missing', requested: route.path }
   }

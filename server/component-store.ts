@@ -30,8 +30,9 @@ export interface StoredLike {
   /**
    * When this revision was written. Doubles as the token an optimistic write
    * names, since a draft has no version of its own until it is published.
-   * Optional here only to keep this interface the minimal slice it says it is;
-   * the library's own record declares it required.
+   * Every write through this store stamps it. Optional because the library's
+   * record type also stands for components read from a repository-backed
+   * project, which carry none.
    */
   updatedAt?: number
   /**
@@ -140,7 +141,10 @@ export function overlayDraft<T extends StoredLike>(published: T[], draft: T[]): 
  * over a record that predates versioning is ahead of v1, the same reading
  * publishedVersion gives an absent version.
  */
-export function draftStateFor<T extends StoredLike>(published: T | undefined, inOverlay: boolean): number | 'unpublished' | undefined {
+export function draftStateFor<T extends StoredLike>(
+  published: T | undefined,
+  inOverlay: boolean,
+): number | 'unpublished' | undefined {
   if (!inOverlay) {
     return undefined
   }
@@ -170,7 +174,10 @@ export function draftStateFor<T extends StoredLike>(published: T | undefined, in
  * Both statements are true and they answer different questions: whether a
  * publish would spend a version, and which files it would carry.
  */
-export function draftFilesChanged<T extends StoredLike>(published: T | undefined, draft: T | undefined): string[] | undefined {
+export function draftFilesChanged<T extends StoredLike>(
+  published: T | undefined,
+  draft: T | undefined,
+): string[] | undefined {
   if (!draft) {
     return undefined
   }
@@ -282,7 +289,6 @@ export interface ChangesSinceResult {
   unknown: string[]
 }
 
-
 export const SHRINK_REFUSED = 'SHRINK_REFUSED'
 
 /**
@@ -318,7 +324,11 @@ export interface StaleWriteError extends Error {
   code: typeof STALE_WRITE
 }
 
-function staleWrite(what: string, expected: string | number, actual: string | number | null): StaleWriteError {
+function staleWrite(
+  what: string,
+  expected: string | number,
+  actual: string | number | null | undefined,
+): StaleWriteError {
   const err = new Error(
     `Refusing to write ${what}: it was ${actual === null ? 'removed' : `last changed at ${actual}`}, ` +
       `and this write was built from ${expected}. Re-read the component and apply the change again — ` +
@@ -402,7 +412,10 @@ export function applyReverseDelta<T extends StoredLike>(newer: T, entry: History
  * from the head — a gap would make every revision beyond it unreconstructable
  * while still costing its bytes.
  */
-export function pruneToComponentBudget(entries: HistoryEntry[], budget = HISTORY_COMPONENT_BUDGET_BYTES): HistoryEntry[] {
+export function pruneToComponentBudget(
+  entries: HistoryEntry[],
+  budget = HISTORY_COMPONENT_BUDGET_BYTES,
+): HistoryEntry[] {
   const kept: HistoryEntry[] = []
   let total = 0
   for (const entry of entries) {
@@ -417,12 +430,11 @@ export function pruneToComponentBudget(entries: HistoryEntry[], budget = HISTORY
 
 /**
  * The timestamp form of changesSince over an already-read published list --
- * pure, because the HTTP routes read storage through the db (no request
- * context) while the node actions read it through host.storage, and both must
- * give one answer. `publishedAt` is the honest signal where it exists;
- * `updatedAt` stands in for records from before versioning, where it moved on
- * every write -- an approximation the action description states rather than
- * hides.
+ * pure, because the HTTP routes and the node actions each read the stored
+ * list on their own, and both must give one answer. `publishedAt` is the
+ * honest signal where it exists; `updatedAt` stands in for records from before
+ * versioning, where it moved on every write -- an approximation the action
+ * description states rather than hides.
  */
 export function changedSince<T extends StoredLike>(published: T[], since: number): ChangedComponent[] {
   const changed: ChangedComponent[] = []
@@ -622,14 +634,23 @@ export function createComponentStore<T extends StoredLike>(deps: ComponentStoreD
     const current = published.find((c) => c.id === target.id)
 
     if (options.expectedVersion !== undefined && options.expectedVersion !== publishedVersion(current)) {
-      throw staleWrite(`component "${name}"`, `version ${options.expectedVersion}`, current ? `version ${publishedVersion(current)}` : null)
+      throw staleWrite(
+        `component "${name}"`,
+        `version ${options.expectedVersion}`,
+        current ? `version ${publishedVersion(current)}` : null,
+      )
     }
 
     // Nothing in the overlay means the draft IS what is published. Reported
     // rather than treated as an error, and it spends no version: a publish
     // that changes nothing must not make every consumer re-fetch.
     if (!draft.some((c) => c.id === target.id)) {
-      return { published: false, name, version: publishedVersion(current), history: await historyBytes(projectId, target.id) }
+      return {
+        published: false,
+        name,
+        version: publishedVersion(current),
+        history: await historyBytes(projectId, target.id),
+      }
     }
 
     const version = current ? publishedVersion(current) + 1 : 1
@@ -637,7 +658,12 @@ export function createComponentStore<T extends StoredLike>(deps: ComponentStoreD
     // PREVIOUS publisher's name — inheriting it would attribute this publish
     // to whoever did the last one, which is worse than recording nobody.
     const { publishedBy: _inherited, ...bare } = target as T & { publishedBy?: PublishedBy }
-    const next = { ...(bare as unknown as T), version, publishedAt: now(), ...(options.by ? { publishedBy: options.by } : {}) }
+    const next = {
+      ...(bare as unknown as T),
+      version,
+      publishedAt: now(),
+      ...(options.by ? { publishedBy: options.by } : {}),
+    }
 
     // The delta is against the record that replaces it, so it is computed here,
     // between knowing both. A component published for the first time replaces
@@ -646,7 +672,10 @@ export function createComponentStore<T extends StoredLike>(deps: ComponentStoreD
       ? await fileRevision(projectId, target.id, reverseDelta(current, next, publishedVersion(current), now()))
       : await historyBytes(projectId, target.id)
 
-    await writePublished(projectId, current ? published.map((c) => (c.id === target.id ? next : c)) : [...published, next])
+    await writePublished(
+      projectId,
+      current ? published.map((c) => (c.id === target.id ? next : c)) : [...published, next],
+    )
     await deps.storage.set(
       draftKey(projectId),
       draft.filter((c) => c.id !== target.id),
@@ -769,7 +798,9 @@ export function createComponentStore<T extends StoredLike>(deps: ComponentStoreD
       revisions.push({
         version: entry.version,
         ...(typeof entry.meta?.publishedAt === 'number' ? { publishedAt: entry.meta.publishedAt as number } : {}),
-        ...((entry.meta as { publishedBy?: PublishedBy } | undefined)?.publishedBy ? { by: (entry.meta as { publishedBy?: PublishedBy }).publishedBy } : {}),
+        ...((entry.meta as { publishedBy?: PublishedBy } | undefined)?.publishedBy
+          ? { by: (entry.meta as { publishedBy?: PublishedBy }).publishedBy }
+          : {}),
         filesChanged:
           older && Array.isArray(older.order)
             ? changedAcross(older, entry.order)
@@ -856,8 +887,12 @@ export function createComponentStore<T extends StoredLike>(deps: ComponentStoreD
     return rebuilt
   }
 
-  const indexEntry = (entries: HistoryEntry[]) => ({ bytes: byteLength(entries), oldest: entries[entries.length - 1]?.at ?? 0 })
-  const totalBytes = (index: Record<string, { bytes: number }>) => Object.values(index).reduce((sum, e) => sum + e.bytes, 0)
+  const indexEntry = (entries: HistoryEntry[]) => ({
+    bytes: byteLength(entries),
+    oldest: entries[entries.length - 1]?.at ?? 0,
+  })
+  const totalBytes = (index: Record<string, { bytes: number }>) =>
+    Object.values(index).reduce((sum, e) => sum + e.bytes, 0)
 
   /**
    * File one revision, then hold both budgets: the component's own first, then
@@ -971,7 +1006,11 @@ export function createComponentStore<T extends StoredLike>(deps: ComponentStoreD
       // Against a record with no files at all, so every file differs and the
       // entry is a full snapshot. It has to be: once the component is gone
       // there is no published head left for a delta to be relative to.
-      await fileRevision(projectId, target.id, reverseDelta(last, { ...last, files: [] }, publishedVersion(last), now()))
+      await fileRevision(
+        projectId,
+        target.id,
+        reverseDelta(last, { ...last, files: [] }, publishedVersion(last), now()),
+      )
     }
     return { deleted: true, name }
   }
@@ -1048,10 +1087,16 @@ export function createComponentStore<T extends StoredLike>(deps: ComponentStoreD
         throw new Error(`A component named "${newName}" already exists here.`)
       }
       if (publishedComp) {
-        await writePublished(projectId, publishedSource.map((c) => (c.id === comp.id ? rename(c) : c)))
+        await writePublished(
+          projectId,
+          publishedSource.map((c) => (c.id === comp.id ? rename(c) : c)),
+        )
       }
       if (draftComp) {
-        await deps.storage.set(draftKey(projectId), draftSource.map((c) => (c.id === comp.id ? rename(c) : c)))
+        await deps.storage.set(
+          draftKey(projectId),
+          draftSource.map((c) => (c.id === comp.id ? rename(c) : c)),
+        )
       }
       return { moved: true, name: newName, project: projectId }
     }
@@ -1067,13 +1112,20 @@ export function createComponentStore<T extends StoredLike>(deps: ComponentStoreD
       await deps.storage.set(draftKey(destProject), [...(await readDraftOverlay(destProject)), rename(draftComp)])
     }
     if (publishedComp) {
-      await writePublished(projectId, publishedSource.filter((c) => c.id !== comp.id), {
-        allowShrink: true,
-        reason: `moveComponent("${name}") to project ${destProject}`,
-      })
+      await writePublished(
+        projectId,
+        publishedSource.filter((c) => c.id !== comp.id),
+        {
+          allowShrink: true,
+          reason: `moveComponent("${name}") to project ${destProject}`,
+        },
+      )
     }
     if (draftComp) {
-      await deps.storage.set(draftKey(projectId), draftSource.filter((c) => c.id !== comp.id))
+      await deps.storage.set(
+        draftKey(projectId),
+        draftSource.filter((c) => c.id !== comp.id),
+      )
     }
     // History is keyed by project, so it has to travel with the component or it
     // is left where nothing can reach it. The index moves with it, or the

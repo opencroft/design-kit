@@ -45,7 +45,10 @@ test('a block name with characters a path cannot carry survives the round trip',
 
 test('a path that is no page of the App is unknown, and keeps the path to quote', () => {
   assert.deepEqual(componentRouteOf('/component'), { page: 'unknown', path: '/component' })
-  assert.deepEqual(componentRouteOf('/component/button/history'), { page: 'unknown', path: '/component/button/history' })
+  assert.deepEqual(componentRouteOf('/component/button/history'), {
+    page: 'unknown',
+    path: '/component/button/history',
+  })
   assert.deepEqual(componentRouteOf('/item/K-1'), { page: 'unknown', path: '/item/K-1' })
 })
 
@@ -63,7 +66,10 @@ test('an old link carries its reference; an empty one carries none', () => {
 })
 
 test('an old link moves to the component path and keeps the editor view', () => {
-  assert.equal(legacyLinkTarget('button', new URLSearchParams('component=kit.button&view=editor')), '/component/button?view=editor')
+  assert.equal(
+    legacyLinkTarget('button', new URLSearchParams('component=kit.button&view=editor')),
+    '/component/button?view=editor',
+  )
   assert.equal(legacyLinkTarget('button', new URLSearchParams('component=kit.button')), '/component/button')
   // The bare address carries no reference: the first component's path alone.
   assert.equal(legacyLinkTarget('alert', new URLSearchParams('')), '/component/alert')

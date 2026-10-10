@@ -1,21 +1,31 @@
-import { React } from '@ext/host'
-import ui, { Input } from '@ext/ui'
+import { Input, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@opencroft/client/ui'
+import type { ChangeEvent, ReactNode } from 'react'
 
 import type { Control, PropRow } from '../registry'
 
 // A properties table on the shared `ui` Table, with an interactive "Value"
 // column. Rows without a control (complex types like lambdas / React nodes)
 // leave the Value cell empty.
-const { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } = ui as Record<string, React.ComponentType<Record<string, unknown>>>
-
-function Chip({ children }: { children: React.ReactNode }) {
+function Chip({ children }: { children: ReactNode }) {
   return <code className='rounded bg-muted px-1.5 py-0.5 font-mono text-xs'>{children}</code>
 }
 
-function ValueControl({ control, value, onChange }: { control: Control; value: string | boolean; onChange: (v: string | boolean) => void }) {
+function ValueControl({
+  control,
+  value,
+  onChange,
+}: {
+  control: Control
+  value: string | boolean
+  onChange: (name: string, v: string | boolean) => void
+}) {
   if (control.kind === 'enum') {
     return (
-      <select value={String(value)} onChange={(e) => onChange(e.target.value)} className='h-8 w-full rounded-md border bg-background px-2 text-xs'>
+      <select
+        value={String(value)}
+        onChange={(e) => onChange(control.name, e.target.value)}
+        className='h-8 w-full rounded-md border bg-background px-2 text-xs'
+      >
         {control.options.map((o) => (
           <option key={o} value={o}>
             {o}
@@ -25,12 +35,33 @@ function ValueControl({ control, value, onChange }: { control: Control; value: s
     )
   }
   if (control.kind === 'boolean') {
-    return <input type='checkbox' checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} className='h-4 w-4 accent-primary' />
+    return (
+      <input
+        type='checkbox'
+        checked={Boolean(value)}
+        onChange={(e) => onChange(control.name, e.target.checked)}
+        className='h-4 w-4 accent-primary'
+      />
+    )
   }
-  return <Input value={String(value)} onChange={(e) => onChange(e.target.value)} className='h-8' />
+  return (
+    <Input
+      value={String(value)}
+      onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(control.name, e.target.value)}
+      className='h-8'
+    />
+  )
 }
 
-export function PropsTable({ rows, values, onChange }: { rows: PropRow[]; values: Record<string, string | boolean>; onChange: (name: string, v: string | boolean) => void }) {
+export function PropsTable({
+  rows,
+  values,
+  onChange,
+}: {
+  rows: PropRow[]
+  values: Record<string, string | boolean>
+  onChange: (name: string, v: string | boolean) => void
+}) {
   return (
     <div className='w-full overflow-x-auto rounded-md border'>
       <Table>
@@ -54,7 +85,11 @@ export function PropsTable({ rows, values, onChange }: { rows: PropRow[]; values
               </TableCell>
               <TableCell className='text-muted-foreground'>{r.default ? <Chip>{r.default}</Chip> : '-'}</TableCell>
               <TableCell className='text-muted-foreground'>{r.description}</TableCell>
-              <TableCell>{r.control ? <ValueControl control={r.control} value={values[r.control.name]} onChange={(v) => onChange(r.control!.name, v)} /> : null}</TableCell>
+              <TableCell>
+                {r.control ? (
+                  <ValueControl control={r.control} value={values[r.control.name]} onChange={onChange} />
+                ) : null}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

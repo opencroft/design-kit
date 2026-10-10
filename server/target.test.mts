@@ -6,8 +6,16 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { assertTargetsAvailable, categorizedTarget, namespaceOf, rewriteComponentImports, servedTarget, targetPath, withExplicitTargets } from './target.ts'
 import type { ImportOrigin, ImportTargets, TargetComponent, TargetFile } from './target.ts'
+import {
+  assertTargetsAvailable,
+  categorizedTarget,
+  namespaceOf,
+  rewriteComponentImports,
+  servedTarget,
+  targetPath,
+  withExplicitTargets,
+} from './target.ts'
 
 /** The library's own rule for materialising a record's files, as index.ts applies it. */
 function normalizeFiles(c: TargetComponent): TargetFile[] {
@@ -26,9 +34,17 @@ const comp = (over: Partial<TargetComponent> = {}): TargetComponent => ({
   name: 'widget',
   type: 'registry:ui',
   category: 'Utils',
-  files: [{ path: 'components/ui/widget.tsx', target: 'components/ui/widget.tsx', type: 'registry:component', content: '' }],
+  files: [
+    { path: 'components/ui/widget.tsx', target: 'components/ui/widget.tsx', type: 'registry:component', content: '' },
+  ],
   ...over,
 })
+
+function firstFile(component: TargetComponent): TargetFile {
+  const file = component.files?.[0]
+  assert.ok(file, `${component.name} has a file`)
+  return file
+}
 
 /**
  * One record of every class that composes differently. A spot check over the
@@ -37,19 +53,82 @@ const comp = (over: Partial<TargetComponent> = {}): TargetComponent => ({
 const EVERY_CLASS: Array<[string, TargetComponent]> = [
   ['flat target with a category', comp()],
   ['no category at all', comp({ category: '' })],
-  ['category that slugifies away from its stored folder', comp({ category: 'Layouts', files: [{ path: 'components/ui/layout/widget.tsx', target: 'components/ui/layout/widget.tsx', type: 'registry:component', content: '' }] })],
-  ['target already carrying a subfolder', comp({ files: [{ path: 'components/ui/media/widget.tsx', target: 'components/ui/media/widget.tsx', type: 'registry:component', content: '' }] })],
-  ['a hook, which lives outside components/ui', comp({ type: 'registry:hook', name: 'use-thing', files: [{ path: 'hooks/use-thing.ts', target: 'hooks/use-thing.ts', type: 'registry:hook', content: '' }] })],
-  ['several files, one of them a secondary', comp({ files: [
-    { path: 'components/ui/widget.tsx', target: 'components/ui/widget.tsx', type: 'registry:component', content: '' },
-    { path: 'components/ui/widget-row.tsx', target: 'components/ui/widget-row.tsx', type: 'registry:component', content: '' },
-  ] })],
-  ['a file with no stored target, falling back to its path', comp({ files: [{ path: 'components/ui/widget.tsx', type: 'registry:component', content: '' }] })],
-  ['the legacy single-source form, with no files at all', comp({ files: undefined, source: 'export const Widget = null' })],
-  ['a docs file, which is never installed but still has a target', comp({ files: [
-    { path: 'components/ui/widget.tsx', target: 'components/ui/widget.tsx', type: 'registry:component', content: '' },
-    { path: 'docs/doc.mdx', target: 'docs/doc.mdx', type: 'registry:ignore', content: '' },
-  ] })],
+  [
+    'category that slugifies away from its stored folder',
+    comp({
+      category: 'Layouts',
+      files: [
+        {
+          path: 'components/ui/layout/widget.tsx',
+          target: 'components/ui/layout/widget.tsx',
+          type: 'registry:component',
+          content: '',
+        },
+      ],
+    }),
+  ],
+  [
+    'target already carrying a subfolder',
+    comp({
+      files: [
+        {
+          path: 'components/ui/media/widget.tsx',
+          target: 'components/ui/media/widget.tsx',
+          type: 'registry:component',
+          content: '',
+        },
+      ],
+    }),
+  ],
+  [
+    'a hook, which lives outside components/ui',
+    comp({
+      type: 'registry:hook',
+      name: 'use-thing',
+      files: [{ path: 'hooks/use-thing.ts', target: 'hooks/use-thing.ts', type: 'registry:hook', content: '' }],
+    }),
+  ],
+  [
+    'several files, one of them a secondary',
+    comp({
+      files: [
+        {
+          path: 'components/ui/widget.tsx',
+          target: 'components/ui/widget.tsx',
+          type: 'registry:component',
+          content: '',
+        },
+        {
+          path: 'components/ui/widget-row.tsx',
+          target: 'components/ui/widget-row.tsx',
+          type: 'registry:component',
+          content: '',
+        },
+      ],
+    }),
+  ],
+  [
+    'a file with no stored target, falling back to its path',
+    comp({ files: [{ path: 'components/ui/widget.tsx', type: 'registry:component', content: '' }] }),
+  ],
+  [
+    'the legacy single-source form, with no files at all',
+    comp({ files: undefined, source: 'export const Widget = null' }),
+  ],
+  [
+    'a docs file, which is never installed but still has a target',
+    comp({
+      files: [
+        {
+          path: 'components/ui/widget.tsx',
+          target: 'components/ui/widget.tsx',
+          type: 'registry:component',
+          content: '',
+        },
+        { path: 'docs/doc.mdx', target: 'docs/doc.mdx', type: 'registry:ignore', content: '' },
+      ],
+    }),
+  ],
 ]
 
 test('migrating a component moves no served path, for every class of record', () => {
@@ -76,15 +155,15 @@ test('once targets are explicit, a category change does not move a served path',
   const migrated = withExplicitTargets(comp(), normalizeFiles)
   const recategorised = { ...migrated, category: 'Media' }
 
-  assert.equal(servedTarget(migrated.files![0], recategorised), 'components/ui/utils/widget.tsx')
+  assert.equal(servedTarget(firstFile(migrated), recategorised), 'components/ui/utils/widget.tsx')
 })
 
 test('before migration, a category change does move it — which is why the guard has to fire there', () => {
   const before = comp()
   const recategorised = { ...before, category: 'Media' }
 
-  assert.equal(servedTarget(before.files![0], before), 'components/ui/utils/widget.tsx')
-  assert.equal(servedTarget(before.files![0], recategorised), 'components/ui/media/widget.tsx')
+  assert.equal(servedTarget(firstFile(before), before), 'components/ui/utils/widget.tsx')
+  assert.equal(servedTarget(firstFile(before), recategorised), 'components/ui/media/widget.tsx')
 })
 
 test('an author can put an explicit target anywhere, including flat under a category', () => {
@@ -155,7 +234,10 @@ test('two files in the same package name each other by path, not by alias', () =
 // one directory the specifier is a bare sibling, which is also what the
 // authored source says — so this case rewrites to itself.
 test('a sibling served from the same directory comes out as a sibling', () => {
-  const flat: ImportTargets = { byName: { markdown: 'components/markdown.tsx' }, byStoredPath: { 'components/markdown': 'components/markdown.tsx' } }
+  const flat: ImportTargets = {
+    byName: { markdown: 'components/markdown.tsx' },
+    byStoredPath: { 'components/markdown': 'components/markdown.tsx' },
+  }
   const turn: ImportOrigin = { stored: 'components/chat-turn.tsx', served: 'components/chat-turn.tsx' }
 
   assert.equal(rewriteComponentImports(`import { M } from './markdown'`, turn, flat), `import { M } from './markdown'`)
@@ -178,8 +260,14 @@ test('a reference that crosses into the shared package keeps the alias', () => {
 // And the same boundary from the other side, so the rule is pinned as a
 // comparison of both ends rather than a property of the importee alone.
 test('a reference out of the shared package into the own one keeps the alias too', () => {
-  const targets: ImportTargets = { byName: { markdown: 'components/markdown.tsx' }, byStoredPath: { 'components/markdown': 'components/markdown.tsx' } }
-  const shared: ImportOrigin = { stored: 'components/ui/thread-artifacts.tsx', served: 'components/ui/group-chat/thread-artifacts.tsx' }
+  const targets: ImportTargets = {
+    byName: { markdown: 'components/markdown.tsx' },
+    byStoredPath: { 'components/markdown': 'components/markdown.tsx' },
+  }
+  const shared: ImportOrigin = {
+    stored: 'components/ui/thread-artifacts.tsx',
+    served: 'components/ui/group-chat/thread-artifacts.tsx',
+  }
 
   assert.equal(
     rewriteComponentImports(`import { M } from './markdown'`, shared, targets),
@@ -316,7 +404,11 @@ const held = (id: string, name: string, target: string, over: Partial<Guarded> =
 
 test('a target already served by ANOTHER project is refused', async () => {
   const deps = library([
-    { id: 'p1', name: 'Acme UI', components: [held('cp_1', 'status-indicator', 'components/ui/utils/status-indicator.tsx')] },
+    {
+      id: 'p1',
+      name: 'Acme UI',
+      components: [held('cp_1', 'status-indicator', 'components/ui/utils/status-indicator.tsx')],
+    },
     { id: 'p2', name: 'Base Components', components: [] },
   ])
 
@@ -331,7 +423,10 @@ test('a target served in the SAME project is refused too, which is why the scope
     { id: 'p1', name: 'Acme UI', components: [held('cp_1', 'alpha', 'components/ui/feedback/shared-row.tsx')] },
   ])
 
-  await assert.rejects(assertTargetsAvailable(held('cp_2', 'beta', 'components/ui/feedback/shared-row.tsx'), deps), /already serves that exact path/)
+  await assert.rejects(
+    assertTargetsAvailable(held('cp_2', 'beta', 'components/ui/feedback/shared-row.tsx'), deps),
+    /already serves that exact path/,
+  )
 })
 
 // The negative control, as a test: the same file name under two categories is
@@ -357,12 +452,16 @@ test('a component does not collide with itself, so re-saving one is not refused'
 // comparison are checked: the claimant's ignored files claim nothing, and the
 // holder's ignored files block nothing.
 test('registry:ignore files neither claim a target nor block one', async () => {
-  const holder = held('cp_1', 'alpha', 'docs/doc.mdx', { files: [{ path: 'docs/doc.mdx', target: 'docs/doc.mdx', type: 'registry:ignore', content: '' }] })
+  const holder = held('cp_1', 'alpha', 'docs/doc.mdx', {
+    files: [{ path: 'docs/doc.mdx', target: 'docs/doc.mdx', type: 'registry:ignore', content: '' }],
+  })
   const deps = library([{ id: 'p1', name: 'Acme UI', components: [holder] }])
 
   await assertTargetsAvailable(held('cp_2', 'beta', 'docs/doc.mdx'), deps)
   await assertTargetsAvailable(
-    held('cp_3', 'gamma', 'docs/doc.mdx', { files: [{ path: 'docs/doc.mdx', target: 'docs/doc.mdx', type: 'registry:ignore', content: '' }] }),
+    held('cp_3', 'gamma', 'docs/doc.mdx', {
+      files: [{ path: 'docs/doc.mdx', target: 'docs/doc.mdx', type: 'registry:ignore', content: '' }],
+    }),
     library([{ id: 'p1', name: 'Acme UI', components: [held('cp_1', 'alpha', 'docs/doc.mdx')] }]),
   )
 })
@@ -370,10 +469,16 @@ test('registry:ignore files neither claim a target nor block one', async () => {
 // An unmigrated record still composes its category, so the guard has to compare
 // what each side SERVES rather than what each side stores.
 test('a collision between a migrated and an unmigrated record is still seen', async () => {
-  const unmigrated = held('cp_1', 'alpha', 'components/ui/shared-row.tsx', { category: 'Feedback', targetsExplicit: undefined })
+  const unmigrated = held('cp_1', 'alpha', 'components/ui/shared-row.tsx', {
+    category: 'Feedback',
+    targetsExplicit: undefined,
+  })
   const deps = library([{ id: 'p1', name: 'Acme UI', components: [unmigrated] }])
 
-  await assert.rejects(assertTargetsAvailable(held('cp_2', 'beta', 'components/ui/feedback/shared-row.tsx'), deps), /already serves that exact path/)
+  await assert.rejects(
+    assertTargetsAvailable(held('cp_2', 'beta', 'components/ui/feedback/shared-row.tsx'), deps),
+    /already serves that exact path/,
+  )
 })
 
 test('a component with no installable files claims nothing and is never refused', async () => {

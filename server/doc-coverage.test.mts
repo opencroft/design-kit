@@ -55,7 +55,9 @@ test('a document that parsed only the tags before the break is still truncated',
 // report every such page as truncated -- the false positive that would get
 // this check removed within a week.
 test('tags inside a fenced code block are being shown, not declared', () => {
-  const mdx = ['Write it like this:', '', '```', '<Preview src="./preview.tsx" />', '```', '', 'That is all.'].join('\n')
+  const mdx = ['Write it like this:', '', '```', '<Preview src="./preview.tsx" />', '```', '', 'That is all.'].join(
+    '\n',
+  )
   assert.deepEqual(docCoverage(mdx, 0), { state: 'prose' })
 })
 
@@ -96,7 +98,9 @@ test('a tag inside a JSX comment is disabled, not declared', () => {
 })
 
 test('a multi-line JSX comment is disabled too', () => {
-  const mdx = ['{/*', '  <Preview src="./preview.tsx" />', '  <Example src="./e.tsx" />', '*/}', '', 'Words.'].join('\n')
+  const mdx = ['{/*', '  <Preview src="./preview.tsx" />', '  <Example src="./e.tsx" />', '*/}', '', 'Words.'].join(
+    '\n',
+  )
   assert.deepEqual(docCoverage(mdx, 0), { state: 'prose' })
 })
 
@@ -121,9 +125,9 @@ test('the truncated message names both counts and what causes it', () => {
 // severe: an unrecognised kind is a hard failure, so a kind added to the union
 // without touching the constant turns every document using it red.
 //
-// A type-level pin would be the usual answer and cannot work here -- this
-// repository has no tsconfig and no typecheck script, so nothing would ever
-// evaluate it. This runs in the suite that actually runs.
+// A type-level pin would be the usual answer, but `npm run typecheck` does not
+// read this repository's .mts test files, so a pin here would never be
+// evaluated. This runs in the suite that actually runs.
 test('the permitted control kinds are exactly the ones the registry union declares', () => {
   const source = readFileSync(new URL('../src/registry/types.ts', import.meta.url), 'utf8')
   const union = source.match(/export type Control =([\s\S]*?)(?=\n\nexport |\n\n\/\/)/)
@@ -152,9 +156,7 @@ test('every permitted kind passes', () => {
 // A control with no kind at all is as unusable as one with a wrong kind, and
 // it is the shape a hand-edited doc produces most easily.
 test('a control with a missing kind is reported rather than skipped', () => {
-  assert.deepEqual(unknownControlKinds([{ name: 'label', default: 'x' }]), [
-    { control: 'label', kind: 'undefined' },
-  ])
+  assert.deepEqual(unknownControlKinds([{ name: 'label', default: 'x' }]), [{ control: 'label', kind: 'undefined' }])
 })
 
 test('an unnamed control is still reported, named as unnamed', () => {

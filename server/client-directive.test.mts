@@ -5,7 +5,7 @@
 // CLI's own regex lacks.
 //
 // The route and the install script live in index.ts, which imports
-// `@ext/host` and cannot be loaded here. The guards at the bottom read its
+// `@opencroft/server` and cannot be loaded here. The guards at the bottom read its
 // source and say only that the wiring is in place, not that it works.
 
 import assert from 'node:assert/strict'
@@ -15,7 +15,10 @@ import { test } from 'node:test'
 import { stripClientDirective, stripsClientDirective } from './client-directive.ts'
 
 test('a leading directive and the blank line after it go', () => {
-  assert.equal(stripClientDirective(`'use client'\n\nimport * as React from 'react'\n`), `import * as React from 'react'\n`)
+  assert.equal(
+    stripClientDirective(`'use client'\n\nimport * as React from 'react'\n`),
+    `import * as React from 'react'\n`,
+  )
 })
 
 test('both quotes, with or without a semicolon', () => {
@@ -25,7 +28,10 @@ test('both quotes, with or without a semicolon', () => {
 })
 
 test('comments above the directive stay', () => {
-  assert.equal(stripClientDirective(`// header\n/* block */\n'use client'\n\nexport {}\n`), `// header\n/* block */\nexport {}\n`)
+  assert.equal(
+    stripClientDirective(`// header\n/* block */\n'use client'\n\nexport {}\n`),
+    `// header\n/* block */\nexport {}\n`,
+  )
 })
 
 test('a file that is only the directive becomes empty', () => {
@@ -69,7 +75,7 @@ test('only rsc=false asks for the removal', () => {
 const index = readFileSync(new URL('./index.ts', import.meta.url), 'utf-8')
 
 test('the registry item route serves stripped files when asked', () => {
-  assert.match(index, /registryItem\([^\n]*stripsClientDirective\(url\)\)/)
+  assert.match(index, /registryItem\([^;]*stripsClientDirective\(url\),?\s*\)/)
   assert.match(index, /stripDirective \? stripClientDirective\(content\) : content/)
 })
 

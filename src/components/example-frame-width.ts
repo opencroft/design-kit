@@ -61,7 +61,10 @@ export function isBounded(width: ExampleFrameWidth): boolean {
  * carrying nothing, so this template is the COMPLETE description of where the
  * content sits — turning the hatch off cannot move it.
  */
-export function frameTracks(width: ExampleFrameWidth, gutter: number): { gridTemplateColumns: string; gridTemplateRows: string } {
+export function frameTracks(
+  width: ExampleFrameWidth,
+  gutter: number,
+): { gridTemplateColumns: string; gridTemplateRows: string } {
   const side = `minmax(${gutter}rem,auto)`
   const middle = width === 'full' ? 'minmax(0,1fr)' : width === 'fit' ? 'auto' : `${width}px`
   return {

@@ -1,10 +1,12 @@
 {
   "name": "design-kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "private": true,
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "fix": "opencroft-dev fix",
+    "typecheck": "opencroft-dev typecheck"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

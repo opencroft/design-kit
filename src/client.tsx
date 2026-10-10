@@ -1,4 +1,4 @@
-import { defineExtension } from '@ext/host'
+import { defineExtension } from '@opencroft/client/extension'
 
 import { DesignKitAppView } from './design-kit-app-view'
 

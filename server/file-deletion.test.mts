@@ -122,13 +122,19 @@ test('removed and remaining partition the records, and nothing is on the wrong s
     const plan = planDeletion(files, requests)
     assert.equal(plan.removed.length + plan.remaining.length, files.length)
     for (const file of plan.removed) {
-      assert.ok(requests.some((r) => addresses(file, r)), `removed a record no request names: ${file.target}`)
+      assert.ok(
+        requests.some((r) => addresses(file, r)),
+        `removed a record no request names: ${file.target}`,
+      )
     }
     for (const file of plan.remaining) {
       assert.ok(!requests.some((r) => addresses(file, r)), `kept a record a request names: ${file.target}`)
     }
     for (const request of plan.deleted) {
-      assert.ok(plan.removed.some((f) => addresses(f, request)), `reported deleted with nothing removed: ${request}`)
+      assert.ok(
+        plan.removed.some((f) => addresses(f, request)),
+        `reported deleted with nothing removed: ${request}`,
+      )
     }
     for (const request of plan.missing) {
       assert.ok(!files.some((f) => addresses(f, request)), `reported missing while a record matches: ${request}`)

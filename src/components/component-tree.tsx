@@ -1,10 +1,19 @@
-import { icons, React } from '@ext/host'
-import ui from '@ext/ui'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@opencroft/client/ui'
+import {
+  Blocks,
+  ChevronRight,
+  Code,
+  Component,
+  Folder,
+  Layout,
+  MessageSquare,
+  Play,
+  TextCursor,
+  Wrench,
+} from 'lucide-react'
+import type { ComponentType, ReactNode } from 'react'
 
 import { ComponentTreeItem } from './component-tree-item'
-
-const { Blocks, ChevronRight, Code, Component, Folder, Layout, MessageSquare, Play, TextCursor, Wrench } = icons
-const { Collapsible, CollapsibleContent, CollapsibleTrigger } = ui as Record<string, React.ComponentType<Record<string, unknown>>>
 
 export interface ComponentTreeEntry {
   name: string
@@ -26,7 +35,7 @@ export interface ComponentTreeProps {
   onSelect?: (name: string) => void
 }
 
-const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+const CATEGORY_ICON: Record<string, ComponentType<{ className?: string }>> = {
   Chat: MessageSquare,
   Input: TextCursor,
   Layouts: Layout,
@@ -35,7 +44,7 @@ const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>>
   'Design Kit': Blocks,
 }
 
-function SectionLabel({ icon: Icon, children }: { icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
+function SectionLabel({ icon: Icon, children }: { icon: ComponentType<{ className?: string }>; children: ReactNode }) {
   return (
     <div className='mb-1 flex items-center px-2 text-xs font-semibold tracking-wide text-muted-foreground'>
       <Icon className='mr-2 h-4 w-4' />

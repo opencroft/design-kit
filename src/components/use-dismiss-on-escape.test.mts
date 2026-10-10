@@ -2,7 +2,7 @@
 // non-destructive answer.
 //
 // **Every assertion here reads SOURCE TEXT, and that is the whole instrument.**
-// The hook and both dialogs import `@ext/host`, which is not a package this
+// The hook and both dialogs import `@opencroft/client`, which is not a package this
 // repo installs, so none of them can be imported by the runner — and the
 // behaviour itself is a key press against a listener, which no assertion here
 // could observe even if they could. Nothing below shows that Escape closes
@@ -55,7 +55,10 @@ test('escape is wired to the destructive callback in neither dialog', () => {
   // Stated separately from the test above rather than trusted as its converse:
   // a second call, or an edited argument, is exactly the change that would slip
   // past a test that only checks the right one is present somewhere.
-  for (const [name, source] of [['discard dialog', dialog], ['leaving guard', guard]] as const) {
+  for (const [name, source] of [
+    ['discard dialog', dialog],
+    ['leaving guard', guard],
+  ] as const) {
     assert.doesNotMatch(source, /useDismissOnEscape\([^)]*onDiscard/, `${name} hands escape the destructive callback`)
     assert.equal(source.split('useDismissOnEscape(').length - 1, 1, `${name} calls it more than once`)
   }
@@ -92,7 +95,10 @@ test('the hook is asked before either dialog gives up rendering', () => {
   // A hook after an early return is a hook that runs on some renders and not
   // others, which React refuses at runtime. The condition is an argument here
   // precisely so the call can sit above the return.
-  for (const [name, source] of [['discard dialog', dialog], ['leaving guard', guard]] as const) {
+  for (const [name, source] of [
+    ['discard dialog', dialog],
+    ['leaving guard', guard],
+  ] as const) {
     const call = source.indexOf('useDismissOnEscape(')
     const bail = source.indexOf('return null')
     assert.ok(call > 0, `${name} does not call it at all`)

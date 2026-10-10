@@ -1,29 +1,59 @@
-import host from '@ext/host'
-import type { AppActionContext } from '@opencroft/server'
+import { type AppActionContext, apps as hostApps } from '@opencroft/server/apps'
+import { routeUrl } from '@opencroft/server/extension'
+import { storage } from '@opencroft/server/storage'
 
 import type { PoolGroup } from '../preview-runtime/protocol'
-import { httpRoute } from '../src/http-route'
 import { componentRefFromQuery, projectFromQuery } from '../src/registry/component-ref'
-
 import { stripClientDirective, stripsClientDirective } from './client-directive'
 import { committerOf } from './commit-identity'
-import { changedSince, componentsKey, createComponentStore, draftFilesChanged, draftKey, draftStateFor, HISTORY_INDEX_KEY, overlayDraft } from './component-store'
-import { aliasImportNames, createDependencyGraphBuilder, parseKitRef as parseDep, reservedNamespaceReason, SELF_SCOPE_PREFIX } from './dependency-graph'
+import {
+  changedSince,
+  componentsKey,
+  createComponentStore,
+  draftFilesChanged,
+  draftKey,
+  draftStateFor,
+  HISTORY_INDEX_KEY,
+  overlayDraft,
+} from './component-store'
+import {
+  aliasImportNames,
+  createDependencyGraphBuilder,
+  parseKitRef as parseDep,
+  reservedNamespaceReason,
+  SELF_SCOPE_PREFIX,
+} from './dependency-graph'
 import { createDesignKitApp } from './design-kit-app'
 import { installRequestFrom } from './install-request'
-import { bundleDep, createPreviewRoutes, DEFAULT_PRESET, type ProjectTheme, resolveThemeCss, THEME_PRESETS } from './preview'
+import {
+  bundleDep,
+  createPreviewRoutes,
+  DEFAULT_PRESET,
+  type ProjectTheme,
+  resolveThemeCss,
+  THEME_PRESETS,
+} from './preview'
 import { createPreviewPoolCache } from './preview-pool-cache'
 import { resolveProjectRef } from './project-resolution'
 import { changeSignals, isIndexRequest, shapeIndexItem, shapeProjects } from './registry-shape'
 import * as repoStore from './repo-store'
 import { collectShadcnSources, shadcnHas } from './shadcn-registry'
 import { DEFAULT_SHADCN_STYLE, effectiveShadcnStyle, parseShadcnStyle, SHADCN_STYLES } from './shadcn-style'
-import { assertTargetsAvailable as assertTargetsAvailableIn, categorizedTarget, type ImportTargets, namespaceOf, rewriteComponentImports, servedTarget, slugify, withExplicitTargets } from './target'
+import {
+  assertTargetsAvailable as assertTargetsAvailableIn,
+  categorizedTarget,
+  type ImportTargets,
+  namespaceOf,
+  rewriteComponentImports,
+  servedTarget,
+  slugify,
+  withExplicitTargets,
+} from './target'
 import { createValidator, type ValidateComponentResult } from './validate'
 import { readValidationSummary, summarizeValidation, type ValidationSummary } from './verdict'
 
 // All design-kit state is persisted under the extension's namespaced key/value
-// storage (host.storage), backed by the app's `setting` table.
+// storage (`storage` from @opencroft/server/storage), backed by the app's `setting` table.
 
 // ── Design projects ────────────────────────────────────
 
@@ -39,12 +69,12 @@ export interface DesignProject {
 const PROJECTS_KEY = 'projects'
 
 async function readProjects(): Promise<DesignProject[]> {
-  const list = await host.storage.get<DesignProject[]>(PROJECTS_KEY)
+  const list = await storage.get<DesignProject[]>(PROJECTS_KEY)
   return Array.isArray(list) ? list : []
 }
 
 async function writeProjects(list: DesignProject[]): Promise<void> {
-  await host.storage.set(PROJECTS_KEY, list)
+  await storage.set(PROJECTS_KEY, list)
 }
 
 function newId(): string {
@@ -70,7 +100,9 @@ function assertNamespaceFree(name: string, projects: DesignProject[], exceptId?:
   const ns = slugify(name)
   const reserved = reservedNamespaceReason(ns)
   if (reserved) {
-    throw new Error(`Refusing the name "${name}": it installs under the namespace "@${ns}", which is reserved. ${reserved} Pick a different name.`)
+    throw new Error(
+      `Refusing the name "${name}": it installs under the namespace "@${ns}", which is reserved. ${reserved} Pick a different name.`,
+    )
   }
   const clash = projects.find((p) => p.id !== exceptId && slugify(p.name) === ns)
   if (clash) {
@@ -139,7 +171,10 @@ async function renameProject(input: { id: string; name: string }): Promise<Desig
  * that is still listed, still visible and safe to retry, rather than an orphan
  * with no owner.
  */
-async function deleteProject(id: string, options: { confirmName?: string; force?: boolean } = {}): Promise<DesignProject[]> {
+async function deleteProject(
+  id: string,
+  options: { confirmName?: string; force?: boolean } = {},
+): Promise<DesignProject[]> {
   const projects = await readProjects()
   const target = findProject(projects, id)
   if (!target) {
@@ -155,7 +190,10 @@ async function deleteProject(id: string, options: { confirmName?: string; force?
   // Everything below is keyed by the project's real id, never by whatever the
   // caller addressed it with — a namespace resolves to a project, but it is
   // not what its storage keys are built from.
-  const held = overlayDraft(await componentStore.readPublished(target.id), await componentStore.readDraftOverlay(target.id))
+  const held = overlayDraft(
+    await componentStore.readPublished(target.id),
+    await componentStore.readDraftOverlay(target.id),
+  )
   if (held.length > 0 && !options.force) {
     throw new Error(
       `Refusing to delete project "${target.name}": it still holds ${held.length} component(s) — ` +
@@ -183,18 +221,18 @@ async function deleteProject(id: string, options: { confirmName?: string; force?
     key === `components-snapshot:${target.id}` ||
     key.startsWith(`component-history:${target.id}:`)
 
-  for (const key of await host.storage.list()) {
+  for (const key of await storage.list()) {
     if (ownedByProject(key)) {
-      await host.storage.delete(key)
+      await storage.delete(key)
     }
   }
-  const historyIndex = (await host.storage.get<Record<string, unknown>>(HISTORY_INDEX_KEY)) ?? {}
+  const historyIndex = (await storage.get<Record<string, unknown>>(HISTORY_INDEX_KEY)) ?? {}
   for (const key of Object.keys(historyIndex)) {
     if (key.startsWith(`component-history:${target.id}:`)) {
       delete historyIndex[key]
     }
   }
-  await host.storage.set(HISTORY_INDEX_KEY, historyIndex)
+  await storage.set(HISTORY_INDEX_KEY, historyIndex)
 
   const next = projects.filter((p) => p.id !== target.id)
   await writeProjects(next)
@@ -211,13 +249,17 @@ async function setProjectTheme(input: { id: string; preset?: string; css?: strin
   const projects = await readProjects()
   const presetInput = typeof input.preset === 'string' ? input.preset.trim() : ''
   if (presetInput && !THEME_PRESETS.some((p) => p.id === presetInput)) {
-    throw new Error(`setTheme: unknown preset "${presetInput}". Valid ids: ${THEME_PRESETS.map((p) => p.id).join(', ')}.`)
+    throw new Error(
+      `setTheme: unknown preset "${presetInput}". Valid ids: ${THEME_PRESETS.map((p) => p.id).join(', ')}.`,
+    )
   }
   const preset = presetInput || DEFAULT_PRESET
   const css = typeof input.css === 'string' && input.css.trim() ? input.css : undefined
   // The shadcn style is not part of what setTheme sets — carried over, so a
   // theme edit never silently moves a project back to new-york-v4.
-  const next = projects.map((p) => (p.id === input.id ? { ...p, theme: { preset, css, shadcnStyle: p.theme?.shadcnStyle }, updatedAt: Date.now() } : p))
+  const next = projects.map((p) =>
+    p.id === input.id ? { ...p, theme: { preset, css, shadcnStyle: p.theme?.shadcnStyle }, updatedAt: Date.now() } : p,
+  )
   await writeProjects(next)
   return next
 }
@@ -227,18 +269,12 @@ async function setProjectTheme(input: { id: string; preset?: string; css?: strin
 async function setProjectShadcnStyle(input: { id: string; style?: string }): Promise<DesignProject[]> {
   const style = parseShadcnStyle(input.style)
   const projects = await readProjects()
-  const next = projects.map((p) => (p.id === input.id ? { ...p, theme: { ...(p.theme ?? {}), shadcnStyle: style }, updatedAt: Date.now() } : p))
+  const next = projects.map((p) =>
+    p.id === input.id ? { ...p, theme: { ...(p.theme ?? {}), shadcnStyle: style }, updatedAt: Date.now() } : p,
+  )
   await writeProjects(next)
   invalidatePreviewPools()
   return next
-}
-
-// Read a project's current theme plus the effective CSS previews render with
-// (same resolution `resolveThemeCss` does for the preview shell).
-async function readTheme(projectId: string): Promise<{ preset?: string; css?: string; shadcnStyle: string; resolvedCss: string }> {
-  const projects = await readProjects()
-  const theme = projects.find((p) => p.id === projectId)?.theme
-  return { preset: theme?.preset, css: theme?.css, shadcnStyle: effectiveShadcnStyle(theme?.shadcnStyle), resolvedCss: resolveThemeCss(theme) }
 }
 
 // ── Components (the registry, as data) ────────────────────
@@ -271,7 +307,9 @@ export interface StoredComponent {
   exportName: string
   signature?: string
   createdAt: number
-  updatedAt: number
+  /** Stamped by every write to the storage-backed store. A record read from a
+   *  repository-backed project has none: its history is the repository's. */
+  updatedAt?: number
   /**
    * How many times this component has been published. Written by a publish and
    * only by a publish, so a record that predates versioning simply has none —
@@ -316,7 +354,7 @@ async function projectExists(projectId: string): Promise<boolean> {
 }
 
 const componentStore = createComponentStore<StoredComponent>({
-  storage: host.storage,
+  storage,
   newId: newComponentId,
   listOtherProjects: async (currentProjectId) =>
     (await readProjects()).filter((p) => p.id !== currentProjectId).map((p) => ({ id: p.id, name: p.name })),
@@ -336,7 +374,7 @@ function requireProject(projectId: unknown): string {
 // What installers are served moves only through a publish. The
 // registry routes read published directly (readComponentsViaDb) and so are
 // unaffected by any of this.
-const { writeComponents, assertNameAvailableGlobally } = componentStore
+const { writeComponents } = componentStore
 
 // Publish with a record: the last validation the draft saw returned
 // alongside — so the moment of shipping is not silent about a failure the
@@ -398,7 +436,9 @@ async function readComponents(projectId: string): Promise<StoredComponent[]> {
  * component can sit in draft indefinitely while nothing says the kit serves
  * something older than what the reader is looking at.
  */
-async function readComponentsWithDraftState(projectId: string): Promise<Array<StoredComponent & { draft?: number | 'unpublished'; draftFilesChanged?: string[] }>> {
+async function readComponentsWithDraftState(
+  projectId: string,
+): Promise<Array<StoredComponent & { draft?: number | 'unpublished'; draftFilesChanged?: string[] }>> {
   const published = await migrateStoredTargets(projectId, await componentStore.readPublished(projectId))
   const overlay = await componentStore.readDraftOverlay(projectId)
   const publishedById = new Map(published.map((c) => [c.id, c]))
@@ -415,175 +455,38 @@ async function readComponentsWithDraftState(projectId: string): Promise<Array<St
   })
 }
 
-/**
- * The revision a caller says it read, for the optimistic guard. Passing none
- * leaves the write unguarded.
- */
-function expectationFor(list: StoredComponent[], name: string, input: Record<string, unknown>): { id: string; updatedAt: number } | undefined {
-  const expected = input.expectedUpdatedAt
-  if (typeof expected !== 'number') {
-    return undefined
-  }
-  // No component holds the name any more, yet the caller named a revision of
-  // it: that is the stale case, not the unguarded one. An id nothing can match
-  // is passed on so the store raises the same refusal by the same rule, rather
-  // than a second copy of it living here.
-  const target = list.find((c) => c.name === name)
-  return { id: target?.id ?? '', updatedAt: expected }
-}
-
 // Wiring only. The rule, and why it is shaped the way it is, live with it in
 // server/target.ts — including what `readComponents` has to return here.
 function assertTargetsAvailable(component: StoredComponent): Promise<void> {
   return assertTargetsAvailableIn(component, {
     listProjects: readProjects,
-    readComponents: async (projectId) => overlayDraft(await componentStore.readPublished(projectId), await componentStore.readDraftOverlay(projectId)),
+    readComponents: async (projectId) =>
+      overlayDraft(await componentStore.readPublished(projectId), await componentStore.readDraftOverlay(projectId)),
     normalizeFiles: componentFiles,
   })
 }
 
-/** The same, for the file actions, which have the record in hand already. */
-function fileWriteExpectation(current: StoredComponent, expectedUpdatedAt?: number): { id: string; updatedAt: number } | undefined {
+/**
+ * The revision a file action's caller says it read, for the optimistic guard.
+ * Passing none leaves the write unguarded.
+ */
+function fileWriteExpectation(
+  current: StoredComponent,
+  expectedUpdatedAt?: number,
+): { id: string; updatedAt: number } | undefined {
   return typeof expectedUpdatedAt === 'number' ? { id: current.id, updatedAt: expectedUpdatedAt } : undefined
-}
-
-function slug(value: unknown): string {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
-function asStringArray(v: unknown): string[] {
-  return Array.isArray(v) ? v.map(String) : []
-}
-
-// Summaries (no source) — cheap for listing.
-async function listComponents(projectId: string): Promise<Array<Pick<StoredComponent, 'name' | 'title' | 'type' | 'category' | 'description' | 'updatedAt'> & { draft?: number | 'unpublished' }>> {
-  const list = await readComponentsWithDraftState(projectId)
-  return list.map(({ name, title, type, category, description, updatedAt, draft }) => (draft === undefined ? { name, title, type, category, description, updatedAt } : { name, title, type, category, description, updatedAt, draft }))
 }
 
 // The draft-annotated view rather than the plain one, so a single component
 // read carries the same draft facts the list already carried. It costs the
 // comparison for whichever components currently hold a draft and nothing for
 // the rest, against a second reader that would be a second definition.
-async function getComponent(projectId: string, name: string): Promise<(StoredComponent & { draft?: number | 'unpublished'; draftFilesChanged?: string[] }) | null> {
+async function getComponent(
+  projectId: string,
+  name: string,
+): Promise<(StoredComponent & { draft?: number | 'unpublished'; draftFilesChanged?: string[] }) | null> {
   const list = await readComponentsWithDraftState(projectId)
   return list.find((c) => c.name === name) ?? null
-}
-
-// Create, or FULLY REPLACE a component's META (unspecified fields reset to
-// defaults). Never touches files — use the file actions for those.
-async function writeComponent(projectId: string, input: Record<string, unknown>): Promise<StoredComponent> {
-  const name = slug(input.name)
-  if (!name) {
-    throw new Error('writeComponent: `name` is required')
-  }
-  if (!input.exportName || typeof input.exportName !== 'string') {
-    throw new Error('writeComponent: `exportName` (string) is required — the symbol the files export')
-  }
-
-  const list = await readComponents(projectId)
-  const existing = list.find((c) => c.name === name)
-  // Only a NEW name in this project is an assignment -- a full replace of a
-  // component that already holds this name here is a re-save, not a claim
-  // on the name, and every existing record must keep saving unmodified.
-  if (!existing) {
-    if (!(await projectExists(projectId))) {
-      throw new Error(`Design project "${projectId}" does not exist. Create it with the projects.create action.`)
-    }
-    await assertNameAvailableGlobally(name, projectId)
-  }
-  const now = Date.now()
-  const type = input.type === 'registry:hook' ? 'registry:hook' : 'registry:ui'
-
-  const next: StoredComponent = {
-    // Not a user-facing field, so "unspecified fields reset to defaults"
-    // (this function's own contract) does not apply to it: a full replace
-    // must keep the identity comment threads reference, not hand out a new
-    // one on every edit.
-    id: existing?.id ?? newComponentId(),
-    name,
-    title: typeof input.title === 'string' && input.title.trim() ? input.title.trim() : name,
-    type,
-    category: typeof input.category === 'string' && input.category.trim() ? input.category.trim() : type === 'registry:hook' ? 'Hooks' : 'Components',
-    description: typeof input.description === 'string' ? input.description : '',
-    dependencies: asStringArray(input.dependencies),
-    registryDependencies: asStringArray(input.registryDependencies),
-    files: existing ? componentFiles(existing) : [],
-    exportName: input.exportName,
-    signature: typeof input.signature === 'string' ? input.signature : undefined,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-    // Born explicit. Every file written below goes through the one composition
-    // rule at the moment it is written, and the stored value is authoritative
-    // from then on — so a category rename never relocates anything.
-    targetsExplicit: true,
-  }
-
-  await assertTargetsAvailable(next)
-
-  const merged = existing ? list.map((c) => (c.name === name ? next : c)) : [...list, next]
-  await writeComponents(projectId, merged, { expect: existing ? expectationFor(list, name, input) : undefined })
-  invalidatePreviewPools()
-  return next
-}
-
-// Partial META update — only the fields you pass; files and other fields untouched.
-async function editComponent(projectId: string, name: string, patch: Record<string, unknown>): Promise<StoredComponent> {
-  const list = await readComponents(projectId)
-  const idx = list.findIndex((c) => c.name === name)
-  if (idx < 0) {
-    throw new Error(`Component "${name}" not found in this project.`)
-  }
-  const next = { ...list[idx] }
-  if (patch.title !== undefined) next.title = String(patch.title)
-  if (patch.type !== undefined) next.type = patch.type === 'registry:hook' ? 'registry:hook' : 'registry:ui'
-  if (patch.category !== undefined) next.category = String(patch.category)
-  if (patch.description !== undefined) next.description = String(patch.description)
-  if (patch.exportName !== undefined) next.exportName = String(patch.exportName)
-  if (patch.dependencies !== undefined) next.dependencies = asStringArray(patch.dependencies)
-  if (patch.registryDependencies !== undefined) next.registryDependencies = asStringArray(patch.registryDependencies)
-  if (patch.signature !== undefined) next.signature = patch.signature === null ? undefined : String(patch.signature)
-  next.updatedAt = Date.now()
-  // The category composes into a served target on an unmigrated record, so a
-  // category change is a target change — the trigger the name guard beside this
-  // one does not have, and the way the next collision arrives with no name
-  // changing at all.
-  await assertTargetsAvailable(next)
-  const expect = expectationFor(list, name, patch)
-  list[idx] = next
-  await writeComponents(projectId, list, { expect })
-  // registryDependencies are part of the patch, so a meta edit alone can change
-  // the whole closure the pool walks.
-  invalidatePreviewPools()
-  return next
-}
-
-// Read META. By default no files; `listFiles: true` adds file PATHS (never content).
-async function readComponent(projectId: string, name: string, listFiles?: boolean): Promise<Record<string, unknown>> {
-  const c = await getComponent(projectId, name)
-  if (!c) {
-    throw new Error(`Component "${name}" not found in this project.`)
-  }
-  const { files: _files, source: _source, ...meta } = c as StoredComponent & { source?: string }
-  // The versioning layer's lazy read-backfill, made observable: `version` is
-  // the PUBLISHED record's, reading a record from before versioning as 1; a
-  // never-published component reports none, and its first publish creates 1.
-  // `draft` uses draftStateFor's vocabulary, the same as components.list, so
-  // no surface can disagree with another about what unpublished work exists.
-  const published = (await componentStore.readPublished(projectId)).find((p) => p.id === c.id)
-  const inOverlay = (await componentStore.readDraftOverlay(projectId)).some((d) => d.id === c.id)
-  const draft = draftStateFor(published, inOverlay)
-  const versioned = {
-    ...(published ? { version: componentStore.publishedVersion(published) } : {}),
-    ...(draft === undefined ? {} : { draft }),
-  }
-  return listFiles
-    ? { ...meta, ...versioned, files: componentFiles(c).map((f) => f.target || f.path) }
-    : { ...meta, ...versioned }
 }
 
 /** A `since` from a caller: epoch milliseconds, or anything Date.parse reads. */
@@ -628,36 +531,6 @@ async function repoInstanceFor(projectId: unknown, what: string) {
   return instance
 }
 
-// Resolve a project id-or-slug to its storage id (via host.storage projects).
-async function resolveProjectIdStorage(param: string): Promise<string> {
-  const id = String(param ?? '').trim()
-  if (!id) {
-    return id
-  }
-  const projects = await readProjects()
-  const p = projects.find((x) => x.id === id) ?? projects.find((x) => slug(x.name) === id)
-  return p ? p.id : id
-}
-
-// Move / rename a component: change its name and/or move it to another project.
-// Never rewrites file CONTENTS (use moveFiles to rename file paths). Both
-// collision guards (same-project and cross-project) live in the store and
-// refuse a move onto an existing name before anything is written.
-async function moveComponent(projectId: string, name: string, toName?: string, toProject?: string): Promise<{ moved: boolean; name: string; project: string }> {
-  const destProject = toProject ? await resolveProjectIdStorage(toProject) : undefined
-  const moved = await componentStore.moveComponent(projectId, name, { toName, destProjectId: destProject, slugify: slug })
-  // A move changes the name and/or the project a reference resolves to, in both
-  // the source and the destination — every pool is affected.
-  invalidatePreviewPools()
-  return moved
-}
-
-async function deleteComponent(projectId: string, name: string): Promise<{ deleted: boolean; name: string }> {
-  const deleted = await componentStore.deleteComponent(projectId, name)
-  invalidatePreviewPools()
-  return deleted
-}
-
 // ── File operations (batched) ──────────────────────────────
 // A component's `files[]` is treated as a small filesystem. Operations are
 // batched: read/write take/return arrays, and edit is ALL-OR-NOTHING across the
@@ -677,30 +550,6 @@ function fileKey(f: StoredFile): string {
 
 function findFileIndex(files: StoredFile[], key: string): number {
   return files.findIndex((f) => f.path === key || f.target === key)
-}
-
-// Simple glob → RegExp: `**` spans path separators, `*` doesn't, `?` = one char.
-function globToRegExp(pattern: string): RegExp {
-  const special = '.+^${}()|[]\\'
-  let rx = ''
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i]
-    if (c === '*') {
-      if (pattern[i + 1] === '*') {
-        rx += '.*'
-        i++
-      } else {
-        rx += '[^/]*'
-      }
-    } else if (c === '?') {
-      rx += '[^/]'
-    } else if (special.includes(c)) {
-      rx += `\\${c}`
-    } else {
-      rx += c
-    }
-  }
-  return new RegExp(`^${rx}$`)
 }
 
 async function requireComponent(projectId: string, name: string): Promise<StoredComponent> {
@@ -789,7 +638,12 @@ async function editFiles(
   // `validation` is absent for two distinct reasons, both deliberate: every
   // all-or-nothing failure path below returns before anything is persisted, and
   // there is nothing to validate when nothing changed; or the caller opted out.
-): Promise<{ ok: boolean; results: Array<{ path: string; applied: boolean; count?: number; error?: string }>; files: string[]; validation?: ValidateComponentResult }> {
+): Promise<{
+  ok: boolean
+  results: Array<{ path: string; applied: boolean; count?: number; error?: string }>
+  files: string[]
+  validation?: ValidateComponentResult
+}> {
   if (!Array.isArray(edits) || edits.length === 0) {
     throw new Error('editFiles: `edits` (a non-empty array of { path, old, new, replaceAll? }) is required.')
   }
@@ -824,7 +678,9 @@ async function editFiles(
       continue
     }
     const newStr = String(e?.new ?? '')
-    draft[at].content = e.replaceAll ? draft[at].content.split(oldStr).join(newStr) : draft[at].content.replace(oldStr, newStr)
+    draft[at].content = e.replaceAll
+      ? draft[at].content.split(oldStr).join(newStr)
+      : draft[at].content.replace(oldStr, newStr)
     results.push({ path: key, applied: true, count: e.replaceAll ? occurrences : 1 })
   }
 
@@ -847,50 +703,17 @@ async function editFiles(
   }
 }
 
-// Glob file paths across the project (or one component). Returns { component, path }.
-async function globFiles(projectId: string, pattern: string, componentName?: string): Promise<Array<{ component: string; path: string }>> {
-  const rx = globToRegExp(pattern || '*')
-  const comps = componentName ? [await requireComponent(projectId, componentName)] : await readComponents(projectId)
-  const out: Array<{ component: string; path: string }> = []
-  for (const c of comps) {
-    for (const f of componentFiles(c)) {
-      const key = fileKey(f)
-      if (rx.test(key) || rx.test(f.path)) {
-        out.push({ component: c.name, path: key })
-      }
-    }
-  }
-  return out
-}
-
-// Grep file contents across the project (or one component). Line-oriented.
-async function grepFiles(projectId: string, pattern: string, flags?: string, componentName?: string): Promise<Array<{ component: string; path: string; line: number; text: string }>> {
-  if (!pattern) {
-    throw new Error('grep: `pattern` is required.')
-  }
-  let rx: RegExp
-  try {
-    rx = new RegExp(pattern, String(flags ?? '').replace(/g/g, ''))
-  } catch {
-    throw new Error('grep: invalid regular expression.')
-  }
-  const comps = componentName ? [await requireComponent(projectId, componentName)] : await readComponents(projectId)
-  const out: Array<{ component: string; path: string; line: number; text: string }> = []
-  for (const c of comps) {
-    for (const f of componentFiles(c)) {
-      const lines = f.content.split('\n')
-      for (let i = 0; i < lines.length; i++) {
-        if (rx.test(lines[i])) {
-          out.push({ component: c.name, path: fileKey(f), line: i + 1, text: lines[i] })
-        }
-      }
-    }
-  }
-  return out
-}
-
 // Rename file paths within a component (atomic; never changes content). All-or-nothing.
-async function moveFiles(projectId: string, componentName: string, moves: Array<{ from: string; to: string }>, expectedUpdatedAt?: number): Promise<{ ok: boolean; results: Array<{ from: string; to?: string; applied: boolean; error?: string }>; files: string[] }> {
+async function moveFiles(
+  projectId: string,
+  componentName: string,
+  moves: Array<{ from: string; to: string }>,
+  expectedUpdatedAt?: number,
+): Promise<{
+  ok: boolean
+  results: Array<{ from: string; to?: string; applied: boolean; error?: string }>
+  files: string[]
+}> {
   if (!Array.isArray(moves) || moves.length === 0) {
     throw new Error('moveFiles: `moves` (a non-empty array of { from, to }) is required.')
   }
@@ -936,7 +759,12 @@ async function moveFiles(projectId: string, componentName: string, moves: Array<
 // Batch-delete files from a component (matched by path/target). Removes every
 // matching file and reports which paths were `deleted` vs `missing`; persists as
 // long as at least one file matched. Never touches meta.
-async function deleteFiles(projectId: string, componentName: string, paths: string[], expectedUpdatedAt?: number): Promise<{ deleted: string[]; missing: string[]; remaining: string[] }> {
+async function deleteFiles(
+  projectId: string,
+  componentName: string,
+  paths: string[],
+  expectedUpdatedAt?: number,
+): Promise<{ deleted: string[]; missing: string[]; remaining: string[] }> {
   if (!Array.isArray(paths) || paths.length === 0) {
     throw new Error('deleteFiles: `paths` (a non-empty array of file paths/targets) is required.')
   }
@@ -994,16 +822,23 @@ export const actions = {
   },
   'projects.create': createProject,
   'projects.rename': renameProject,
-  'projects.delete': (input: { id: string; confirmName?: string; force?: boolean }) => deleteProject(String(input?.id ?? ''), { confirmName: input?.confirmName, force: input?.force }),
+  'projects.delete': (input: { id: string; confirmName?: string; force?: boolean }) =>
+    deleteProject(String(input?.id ?? ''), { confirmName: input?.confirmName, force: input?.force }),
   'projects.setTheme': async (input: { id: string; preset?: string; css?: string }) => {
     const instance = await instanceById(String(input?.id ?? ''))
     if (instance) {
       const presetInput = typeof input?.preset === 'string' ? input.preset.trim() : ''
       if (presetInput && !THEME_PRESETS.some((x) => x.id === presetInput)) {
-        throw new Error(`setTheme: unknown preset "${presetInput}". Valid ids: ${THEME_PRESETS.map((x) => x.id).join(', ')}.`)
+        throw new Error(
+          `setTheme: unknown preset "${presetInput}". Valid ids: ${THEME_PRESETS.map((x) => x.id).join(', ')}.`,
+        )
       }
       const { shadcnStyle } = await repoStore.readTheme(instance.dataDir)
-      await repoStore.writeTheme(instance.dataDir, { preset: presetInput || DEFAULT_PRESET, css: typeof input?.css === 'string' && input.css.trim() ? input.css : undefined, shadcnStyle })
+      await repoStore.writeTheme(instance.dataDir, {
+        preset: presetInput || DEFAULT_PRESET,
+        css: typeof input?.css === 'string' && input.css.trim() ? input.css : undefined,
+        shadcnStyle,
+      })
       return readProjects()
     }
     return setProjectTheme({ id: String(input?.id ?? ''), preset: input?.preset, css: input?.css })
@@ -1019,17 +854,21 @@ export const actions = {
   'themes.list': async () => THEME_PRESETS,
   // The eval-pool closure for a component's isolated preview (its project +
   // cross-project design-kit deps + shadcn primitives). See buildPreviewSources.
-  'preview.sources': (input: { projectId: string; component: string }) => buildPreviewSources(requireProject(input?.projectId), String(input?.component ?? '')),
+  'preview.sources': (input: { projectId: string; component: string }) =>
+    buildPreviewSources(requireProject(input?.projectId), String(input?.component ?? '')),
   // The component's dependency graph: provenance-tagged edges, reverse
   // "used by" edges, and every reference that resolves to nothing.
-  'graph.get': (input: { projectId: string; component: string }) => buildDependencyGraph(requireProject(input?.projectId), String(input?.component ?? '')),
+  'graph.get': (input: { projectId: string; component: string }) =>
+    buildDependencyGraph(requireProject(input?.projectId), String(input?.component ?? '')),
   // The per-project reads and writes below serve BOTH worlds: given an
   // instanceId they act on the instance's repo (repo-store), else the legacy
   // KV path — so the same editor UI runs pinned to an App instance on the app
   // page; the legacy KV branch stays until that store is retired.
   'components.list': async (projectId: string) => {
     const instance = await instanceById(requireProject(projectId))
-    return instance ? repoStore.readComponentsWithState(instance.dataDir) : readComponentsWithDraftState(requireProject(projectId))
+    return instance
+      ? repoStore.readComponentsWithState(instance.dataDir)
+      : readComponentsWithDraftState(requireProject(projectId))
   },
   'components.get': async (input: { projectId: string; name: string }) => {
     const instance = await instanceById(requireProject(input?.projectId))
@@ -1067,8 +906,15 @@ export const actions = {
       ? repoStore.listRevisions(instance.dataDir, String(input?.name ?? ''))
       : componentStore.listRevisions(requireProject(input?.projectId), String(input?.name ?? ''))
   },
-  'components.changesSince': (input: { projectId: string; since?: number | string; sinceVersions?: Record<string, number> }) =>
-    componentStore.changesSince(requireProject(input?.projectId), { since: sinceOf(input?.since), sinceVersions: input?.sinceVersions }),
+  'components.changesSince': (input: {
+    projectId: string
+    since?: number | string
+    sinceVersions?: Record<string, number>
+  }) =>
+    componentStore.changesSince(requireProject(input?.projectId), {
+      since: sinceOf(input?.since),
+      sinceVersions: input?.sinceVersions,
+    }),
   // Draft file read/write/edit for the source editor — the same draft-targeted,
   // staleness-guarded semantics on either backend. The writes are admin (see
   // `actionAccess` below); core enforces that at the request-facing
@@ -1090,19 +936,40 @@ export const actions = {
   // file content at a past version lives in that version's tag, and the legacy
   // KV store holds no equivalent — so it says so rather than answering from the
   // draft, which would be today's code under a historical label.
-  'files.compareVersions': async (input: { projectId: string; component: string; from: repoStore.VersionEndpoint; to: repoStore.VersionEndpoint }) => {
+  'files.compareVersions': async (input: {
+    projectId: string
+    component: string
+    from: repoStore.VersionEndpoint
+    to: repoStore.VersionEndpoint
+  }) => {
     const instance = await repoInstanceFor(input?.projectId, 'Comparing two versions')
-    return repoStore.compareComponentVersions(instance.dataDir, String(input?.component ?? ''), endpointOf(input?.from, 'from'), endpointOf(input?.to, 'to'))
+    return repoStore.compareComponentVersions(
+      instance.dataDir,
+      String(input?.component ?? ''),
+      endpointOf(input?.from, 'from'),
+      endpointOf(input?.to, 'to'),
+    )
   },
   // The freshness guard below reaches only the instance arm. The legacy store
   // guards with its own numeric revision, which this surface does not carry —
   // stated rather than left to be noticed.
-  'files.write': async (input: { projectId: string; component: string; files: Array<Record<string, unknown>>; validate?: boolean; expectedState?: string }) => {
+  'files.write': async (input: {
+    projectId: string
+    component: string
+    files: Array<Record<string, unknown>>
+    validate?: boolean
+    expectedState?: string
+  }) => {
     const projectId = requireProject(input?.projectId)
     const instance = await instanceById(projectId)
     if (instance) {
       const component = String(input?.component ?? '')
-      await repoStore.writeFiles(instance.dataDir, component, (input?.files ?? []) as Array<{ path?: string; target?: string; type?: string; content: string }>, input?.expectedState)
+      await repoStore.writeFiles(
+        instance.dataDir,
+        component,
+        (input?.files ?? []) as Array<{ path?: string; target?: string; type?: string; content: string }>,
+        input?.expectedState,
+      )
       // Before the validation below, which builds a pool.
       invalidatePreviewPools()
       const result: Record<string, unknown> = { written: (input?.files ?? []).length }
@@ -1113,7 +980,13 @@ export const actions = {
     }
     return writeFiles(projectId, String(input?.component ?? ''), input?.files ?? [], input?.validate !== false)
   },
-  'files.edit': async (input: { projectId: string; component: string; edits: FileEdit[]; validate?: boolean; expectedState?: string }) => {
+  'files.edit': async (input: {
+    projectId: string
+    component: string
+    edits: FileEdit[]
+    validate?: boolean
+    expectedState?: string
+  }) => {
     const projectId = requireProject(input?.projectId)
     const instance = await instanceById(projectId)
     if (instance) {
@@ -1132,12 +1005,22 @@ export const actions = {
   // The legacy arms of these two invalidate inside moveFiles/deleteFiles, where
   // they persist; the instance arms have no such helper of their own, so they
   // bump here — the write has already happened either way.
-  'files.move': async (input: { projectId: string; component: string; moves: Array<{ from: string; to: string }>; expectedState?: string }) => {
+  'files.move': async (input: {
+    projectId: string
+    component: string
+    moves: Array<{ from: string; to: string }>
+    expectedState?: string
+  }) => {
     const instance = await instanceById(requireProject(input?.projectId))
     if (!instance) {
       return moveFiles(requireProject(input?.projectId), String(input?.component ?? ''), input?.moves ?? [])
     }
-    const moved = await repoStore.moveFiles(instance.dataDir, String(input?.component ?? ''), input?.moves ?? [], input?.expectedState)
+    const moved = await repoStore.moveFiles(
+      instance.dataDir,
+      String(input?.component ?? ''),
+      input?.moves ?? [],
+      input?.expectedState,
+    )
     invalidatePreviewPools()
     return moved
   },
@@ -1146,7 +1029,12 @@ export const actions = {
     if (!instance) {
       return deleteFiles(requireProject(input?.projectId), String(input?.component ?? ''), input?.paths ?? [])
     }
-    const deleted = await repoStore.deleteFiles(instance.dataDir, String(input?.component ?? ''), input?.paths ?? [], input?.expectedState)
+    const deleted = await repoStore.deleteFiles(
+      instance.dataDir,
+      String(input?.component ?? ''),
+      input?.paths ?? [],
+      input?.expectedState,
+    )
     invalidatePreviewPools()
     return deleted
   },
@@ -1173,7 +1061,9 @@ export const actionAccess = {
 // its legacy surface until it is retired; comments are not part of this
 // surface.
 const onRepo =
-  <R>(run: (dir: string, params: Record<string, unknown>, instance: KitInstance, ctx: AppActionContext) => Promise<R> | R) =>
+  <R>(
+    run: (dir: string, params: Record<string, unknown>, instance: KitInstance, ctx: AppActionContext) => Promise<R> | R,
+  ) =>
   async (ctx: AppActionContext, params: Record<string, unknown>): Promise<R> => {
     const instance = await instanceById(ctx.instanceId)
     if (!instance) {
@@ -1225,7 +1115,14 @@ const appParamState = (params: Record<string, unknown>): string | undefined =>
  * state is carried by `state` on the full read a caller makes before writing.
  */
 function summarize(c: repoStore.StoredComponent) {
-  return { name: c.name, title: c.title, type: c.type, category: c.category, description: c.description, version: c.version }
+  return {
+    name: c.name,
+    title: c.title,
+    type: c.type,
+    category: c.category,
+    description: c.description,
+    version: c.version,
+  }
 }
 
 async function requireRepoComponent(dir: string, name: string): Promise<repoStore.StoredComponent> {
@@ -1240,7 +1137,12 @@ async function requireRepoComponent(dir: string, name: string): Promise<repoStor
 // EFFECTIVE shadcn style (the default when none is saved) and the CSS previews
 // render with.
 function themeView(theme: repoStore.ProjectTheme) {
-  return { preset: theme.preset, css: theme.css, shadcnStyle: effectiveShadcnStyle(theme.shadcnStyle), resolvedCss: resolveThemeCss(theme) }
+  return {
+    preset: theme.preset,
+    css: theme.css,
+    shadcnStyle: effectiveShadcnStyle(theme.shadcnStyle),
+    resolvedCss: resolveThemeCss(theme),
+  }
 }
 
 // Set the style `@/components/ui/*` resolves against in this project's
@@ -1273,13 +1175,22 @@ export const instanceActions = {
       throw new Error('writeComponent: `name` and `exportName` are required.')
     }
     const { expectedState: _e, ...input } = p
-    const written = await repoStore.writeComponent(dir, { ...(input as Partial<repoStore.StoredComponent>), name, exportName }, appParamState(p))
+    const written = await repoStore.writeComponent(
+      dir,
+      { ...(input as Partial<repoStore.StoredComponent>), name, exportName },
+      appParamState(p),
+    )
     invalidatePreviewPools()
     return summarize(written)
   }),
   editComponent: onRepo(async (dir, p) => {
     const { name, expectedState: _e, ...patch } = p
-    const edited = await repoStore.editComponent(dir, String(name ?? ''), patch as Partial<repoStore.StoredComponent>, appParamState(p))
+    const edited = await repoStore.editComponent(
+      dir,
+      String(name ?? ''),
+      patch as Partial<repoStore.StoredComponent>,
+      appParamState(p),
+    )
     invalidatePreviewPools()
     return summarize(edited)
   }),
@@ -1303,9 +1214,13 @@ export const instanceActions = {
     // Across projects is across repos: publish into the destination, then a
     // delete-commit here — so the departure is a visible commit in this
     // repo's history and diff, by construction, never a silent absence.
-    const dest = (await designKitInstances()).find((i) => i.slug === toProject || i.instanceId === toProject || i.name === toProject)
+    const dest = (await designKitInstances()).find(
+      (i) => i.slug === toProject || i.instanceId === toProject || i.name === toProject,
+    )
     if (!dest) {
-      throw new Error(`moveComponent: destination "${toProject}" is not a Design Kit app instance. Create the destination app first — its slug becomes the namespace.`)
+      throw new Error(
+        `moveComponent: destination "${toProject}" is not a Design Kit app instance. Create the destination app first — its slug becomes the namespace.`,
+      )
     }
     if (dest.instanceId === instance.instanceId) {
       throw new Error('moveComponent: the destination is this project.')
@@ -1354,8 +1269,12 @@ export const instanceActions = {
   // The two reads behind the history timeline, exposed at the same layer as
   // listRevisions: a version's own files, and the comparison between two
   // points. Each end is a version number, "draft", or "none".
-  readVersion: onRepo((dir, p) => repoStore.readComponentAtEndpoint(dir, String(p.name ?? ''), endpointOf(p.version, 'version'))),
-  compareVersions: onRepo((dir, p) => repoStore.compareComponentVersions(dir, String(p.name ?? ''), endpointOf(p.from, 'from'), endpointOf(p.to, 'to'))),
+  readVersion: onRepo((dir, p) =>
+    repoStore.readComponentAtEndpoint(dir, String(p.name ?? ''), endpointOf(p.version, 'version')),
+  ),
+  compareVersions: onRepo((dir, p) =>
+    repoStore.compareComponentVersions(dir, String(p.name ?? ''), endpointOf(p.from, 'from'), endpointOf(p.to, 'to')),
+  ),
   changesSince: onRepo(async (dir, p) => {
     const sinceVersions = p.sinceVersions as Record<string, number> | undefined
     if (sinceVersions && Object.keys(sinceVersions).length > 0) {
@@ -1375,12 +1294,18 @@ export const instanceActions = {
   setTheme: onRepo(async (dir, p) => {
     const presetInput = typeof p.preset === 'string' ? p.preset.trim() : ''
     if (presetInput && !THEME_PRESETS.some((x) => x.id === presetInput)) {
-      throw new Error(`setTheme: unknown preset "${presetInput}". Valid ids: ${THEME_PRESETS.map((x) => x.id).join(', ')}.`)
+      throw new Error(
+        `setTheme: unknown preset "${presetInput}". Valid ids: ${THEME_PRESETS.map((x) => x.id).join(', ')}.`,
+      )
     }
     // shadcnStyle is carried over, not reset: it has its own action, and a
     // theme edit must not quietly move the project back to new-york-v4.
     const { shadcnStyle } = await repoStore.readTheme(dir)
-    const theme = { preset: presetInput || DEFAULT_PRESET, css: typeof p.css === 'string' && p.css.trim() ? p.css : undefined, shadcnStyle }
+    const theme = {
+      preset: presetInput || DEFAULT_PRESET,
+      css: typeof p.css === 'string' && p.css.trim() ? p.css : undefined,
+      shadcnStyle,
+    }
     await repoStore.writeTheme(dir, theme)
     return themeView(theme)
   }),
@@ -1410,7 +1335,12 @@ export const instanceActions = {
   }),
   editFiles: onRepo(async (dir, p, instance) => {
     const component = String(p.component ?? '')
-    const applied = await repoStore.editFiles(dir, component, (p.edits as Array<{ path: string; old: string; new: string; replaceAll?: boolean }>) ?? [], appParamState(p))
+    const applied = await repoStore.editFiles(
+      dir,
+      component,
+      (p.edits as Array<{ path: string; old: string; new: string; replaceAll?: boolean }>) ?? [],
+      appParamState(p),
+    )
     // Before the validation below, which builds a pool.
     invalidatePreviewPools()
     const result: Record<string, unknown> = { ...applied }
@@ -1420,12 +1350,22 @@ export const instanceActions = {
     return result
   }),
   moveFiles: onRepo(async (dir, p) => {
-    const moved = await repoStore.moveFiles(dir, String(p.component ?? ''), (p.moves as Array<{ from: string; to: string }>) ?? [], appParamState(p))
+    const moved = await repoStore.moveFiles(
+      dir,
+      String(p.component ?? ''),
+      (p.moves as Array<{ from: string; to: string }>) ?? [],
+      appParamState(p),
+    )
     invalidatePreviewPools()
     return moved
   }),
   deleteFiles: onRepo(async (dir, p) => {
-    const deleted = await repoStore.deleteFiles(dir, String(p.component ?? ''), (p.paths as string[]) ?? [], appParamState(p))
+    const deleted = await repoStore.deleteFiles(
+      dir,
+      String(p.component ?? ''),
+      (p.paths as string[]) ?? [],
+      appParamState(p),
+    )
     invalidatePreviewPools()
     return deleted
   }),
@@ -1443,7 +1383,9 @@ export const instanceActions = {
     const scoped = component ? rows.filter((r) => owners.get(r.path) === component) : rows
     return scoped.map((r) => ({ component: owners.get(r.path), path: r.path, line: r.line, text: r.text }))
   }),
-  validateComponent: onRepo((_dir, p, instance) => validateComponent(instance.instanceId, p.name as string | undefined)),
+  validateComponent: onRepo((_dir, p, instance) =>
+    validateComponent(instance.instanceId, p.name as string | undefined),
+  ),
 }
 
 // The Design Kit App (server/design-kit-app.ts): one instance = one design
@@ -1453,13 +1395,13 @@ export const instanceActions = {
 export const apps = createDesignKitApp({ boundActions: instanceActions })
 
 // ── shadcn registry over HTTP ────────────────────────
-// Served under the extension's own HTTP route, httpRoute('<key>'). The
+// Served under the extension's own HTTP route, routeUrl('<key>'). The
 // dispatcher matches route keys EXACTLY (no path params), so the component
 // comes from the query string, as one `component=<project>.<name>` reference
 // (a `/` in place of the `.` reads the same — see
 // src/registry/component-ref.ts). A design project is a registry; configure it
 // in a consumer's components.json:
-//   "@design-kit": "https://<host><httpRoute('registry')>?project=<id>&name={name}"
+//   "@design-kit": "https://<host><routeUrl('registry')>?project=<id>&name={name}"
 // then: npx shadcn@latest add @design-kit/<name>
 // That template keeps the separate `project`/`name` pair, because the `{name}`
 // a client substitutes has to be a whole query value of its own.
@@ -1477,7 +1419,12 @@ export const apps = createDesignKitApp({ boundActions: instanceActions })
 // project without needing a registryDependencies entry), then components
 // reachable via its registryDependencies (`@ns/name`, resolved to a project by
 // namespace).
-async function importTargetMap(projectId: string, ns: string, comp: StoredComponent, projects: Array<{ id: string; name: string }>): Promise<ImportTargets> {
+async function importTargetMap(
+  projectId: string,
+  ns: string,
+  comp: StoredComponent,
+  projects: Array<{ id: string; name: string }>,
+): Promise<ImportTargets> {
   const map: ImportTargets = { byName: {}, byStoredPath: {} }
   const add = (c: StoredComponent): void => {
     for (const f of componentFiles(c).filter((x) => x.type !== 'registry:ignore')) {
@@ -1525,8 +1472,17 @@ function registryItem(c: StoredComponent, targets: ImportTargets, stripDirective
     files: componentFiles(c)
       .filter((f) => f.type !== 'registry:ignore')
       .map((f) => {
-        const content = rewriteComponentImports(f.content, { stored: String(f.target || f.path), served: servedTarget(f, c) }, targets)
-        return { path: f.path, target: servedTarget(f, c), type: f.type, content: stripDirective ? stripClientDirective(content) : content }
+        const content = rewriteComponentImports(
+          f.content,
+          { stored: String(f.target || f.path), served: servedTarget(f, c) },
+          targets,
+        )
+        return {
+          path: f.path,
+          target: servedTarget(f, c),
+          type: f.type,
+          content: stripDirective ? stripClientDirective(content) : content,
+        }
       }),
   }
 }
@@ -1536,16 +1492,6 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
   })
-}
-
-// host.storage wraps a TanStack server fn that needs the request's Start
-// context, which a raw route handler doesn't have. So in routes we read the
-// `setting` row directly via host.db (a plain drizzle connection). The stored
-// shape matches host.storage: setting id 'extension-storage', keyed by
-// `<extensionId>::<key>`.
-type DbHost = {
-  extensionId: string
-  db: { query: { setting: { findFirst: (q: unknown) => Promise<{ data: unknown } | undefined> } } }
 }
 
 // ── Design Kit App instances: repo-backed projects ────────
@@ -1565,7 +1511,7 @@ interface KitInstance {
 
 async function designKitInstances(): Promise<KitInstance[]> {
   try {
-    return await host.apps.listInstances('design-kit')
+    return await hostApps.listInstances('design-kit')
   } catch {
     return []
   }
@@ -1578,16 +1524,10 @@ async function instanceById(id: string): Promise<KitInstance | undefined> {
 async function readComponentsViaDb(projectId: string): Promise<StoredComponent[]> {
   const instance = await instanceById(projectId)
   if (instance) {
-    return (await repoStore.readComponentsPublished(instance.dataDir)) as StoredComponent[]
+    return await repoStore.readComponentsPublished(instance.dataDir)
   }
-  const h = host as unknown as DbHost
-  const row = await h.db.query.setting.findFirst({ where: (s: { id: unknown }, ops: { eq: (a: unknown, b: unknown) => unknown }) => ops.eq(s.id, 'extension-storage') })
-  if (!row) {
-    return []
-  }
-  const data = (typeof row.data === 'string' ? JSON.parse(row.data) : row.data) as Record<string, unknown>
-  const list = data?.[`${h.extensionId}::${componentsKey(projectId)}`]
-  return Array.isArray(list) ? (list as StoredComponent[]) : []
+  const list = await storage.get<StoredComponent[]>(componentsKey(projectId))
+  return Array.isArray(list) ? list : []
 }
 
 async function getComponentViaDb(projectId: string, name: string): Promise<StoredComponent | null> {
@@ -1606,20 +1546,11 @@ async function readEffectiveViaDb(projectId: string): Promise<StoredComponent[]>
   const instance = await instanceById(projectId)
   if (instance) {
     // The working tree IS the draft-first view: uncommitted edits over HEAD.
-    return (await repoStore.readComponents(instance.dataDir)) as StoredComponent[]
+    return await repoStore.readComponents(instance.dataDir)
   }
-  const h = host as unknown as DbHost
-  const row = await h.db.query.setting.findFirst({ where: (s: { id: unknown }, ops: { eq: (a: unknown, b: unknown) => unknown }) => ops.eq(s.id, 'extension-storage') })
-  if (!row) {
-    return []
-  }
-  const data = (typeof row.data === 'string' ? JSON.parse(row.data) : row.data) as Record<string, unknown>
-  const published = data?.[`${h.extensionId}::${componentsKey(projectId)}`]
-  const draft = data?.[`${h.extensionId}::${draftKey(projectId)}`]
-  return overlayDraft(
-    Array.isArray(published) ? (published as StoredComponent[]) : [],
-    Array.isArray(draft) ? (draft as StoredComponent[]) : [],
-  )
+  const published = await storage.get<StoredComponent[]>(componentsKey(projectId))
+  const draft = await storage.get<StoredComponent[]>(draftKey(projectId))
+  return overlayDraft(Array.isArray(published) ? published : [], Array.isArray(draft) ? draft : [])
 }
 
 // Each project is its own registry namespace, derived from its (slugified)
@@ -1627,14 +1558,8 @@ async function readEffectiveViaDb(projectId: string): Promise<StoredComponent[]>
 // lives with the target composition it feeds, in server/target.ts.
 
 async function readProjectsViaDb(): Promise<Array<{ id: string; name: string; slug?: string; theme?: ProjectTheme }>> {
-  const h = host as unknown as { extensionId: string; db: { query: { setting: { findFirst: (q: unknown) => Promise<{ data: unknown } | undefined> } } } }
-  const row = await h.db.query.setting.findFirst({ where: (s: { id: unknown }, ops: { eq: (a: unknown, b: unknown) => unknown }) => ops.eq(s.id, 'extension-storage') })
-  if (!row) {
-    return []
-  }
-  const data = (typeof row.data === 'string' ? JSON.parse(row.data) : row.data) as Record<string, unknown>
-  const list = data?.[`${h.extensionId}::projects`]
-  const legacy = Array.isArray(list) ? (list as Array<{ id: string; name: string; theme?: ProjectTheme }>) : []
+  const list = await storage.get<Array<{ id: string; name: string; theme?: ProjectTheme }>>(PROJECTS_KEY)
+  const legacy = Array.isArray(list) ? list : []
   // App instances are projects too: their id is the instanceId. Their namespace
   // is their SLUG, and it is carried here rather than re-derived downstream.
   //
@@ -1655,7 +1580,12 @@ async function readProjectsViaDb(): Promise<Array<{ id: string; name: string; sl
   const rows: Array<{ id: string; name: string; slug?: string; theme?: ProjectTheme }> = [...legacy]
   for (const i of instances) {
     const theme = await repoStore.readTheme(i.dataDir)
-    rows.push({ id: i.instanceId, name: i.name, slug: i.slug, theme: theme.preset || theme.css || theme.shadcnStyle ? theme : undefined })
+    rows.push({
+      id: i.instanceId,
+      name: i.name,
+      slug: i.slug,
+      theme: theme.preset || theme.css || theme.shadcnStyle ? theme : undefined,
+    })
   }
   return rows
 }
@@ -1673,14 +1603,8 @@ async function readProjectsViaDb(): Promise<Array<{ id: string; name: string; sl
 const PROJECT_ALIASES_KEY = 'project-aliases'
 
 async function readAliasesViaDb(): Promise<Record<string, string>> {
-  const h = host as unknown as DbHost
-  const row = await h.db.query.setting.findFirst({ where: (s: { id: unknown }, ops: { eq: (a: unknown, b: unknown) => unknown }) => ops.eq(s.id, 'extension-storage') })
-  if (!row) {
-    return {}
-  }
-  const data = (typeof row.data === 'string' ? JSON.parse(row.data) : row.data) as Record<string, unknown>
-  const map = data?.[`${h.extensionId}::${PROJECT_ALIASES_KEY}`]
-  return map && typeof map === 'object' && !Array.isArray(map) ? (map as Record<string, string>) : {}
+  const map = await storage.get<Record<string, string>>(PROJECT_ALIASES_KEY)
+  return map && typeof map === 'object' && !Array.isArray(map) ? map : {}
 }
 
 // Resolve a `?project=` value to a project id and the namespace it serves
@@ -1690,7 +1614,11 @@ async function readAliasesViaDb(): Promise<Record<string, string>> {
 // no environment can do. What stays here is the wiring, and the readers stay
 // functions so a step that is never reached is never paid for.
 async function resolveProject(param: string): Promise<{ id: string; ns: string }> {
-  return resolveProjectRef(param, { instances: designKitInstances, aliases: readAliasesViaDb, projects: readProjectsViaDb })
+  return resolveProjectRef(param, {
+    instances: designKitInstances,
+    aliases: readAliasesViaDb,
+    projects: readProjectsViaDb,
+  })
 }
 
 // A route that acts on one component takes it as a single `component`
@@ -1703,7 +1631,11 @@ const MISSING_PROJECT = 'Missing project. Pass `project=<id-or-namespace>`.'
 // Rescope intra-project deps (`@design-kit/x`, the canonical self-scope) to the
 // project's namespace; bare names (shadcn defaults) and other scopes are kept.
 function rescope(deps: unknown, ns: string): string[] {
-  return (Array.isArray(deps) ? deps : []).map((d) => (typeof d === 'string' && d.startsWith(SELF_SCOPE_PREFIX) ? `@${ns}/${d.slice(SELF_SCOPE_PREFIX.length)}` : String(d)))
+  return (Array.isArray(deps) ? deps : []).map((d) =>
+    typeof d === 'string' && d.startsWith(SELF_SCOPE_PREFIX)
+      ? `@${ns}/${d.slice(SELF_SCOPE_PREFIX.length)}`
+      : String(d),
+  )
 }
 
 // GET /http/registry?component=<project>.<name> — a single shadcn registry item.
@@ -1725,7 +1657,11 @@ async function registryItemRoute(req: Request): Promise<Response> {
   if (!comp) {
     return json({ error: `Component "${ref.name}" not found in project ${ref.project}.` }, 404)
   }
-  const item = registryItem(comp, await importTargetMap(id, ns, comp, await readProjectsViaDb()), stripsClientDirective(url))
+  const item = registryItem(
+    comp,
+    await importTargetMap(id, ns, comp, await readProjectsViaDb()),
+    stripsClientDirective(url),
+  )
   item.registryDependencies = rescope(item.registryDependencies, ns)
   return json(item)
 }
@@ -1810,7 +1746,10 @@ async function projectsRoute(): Promise<Response> {
 // the one the registry serves and the one we tell people to write — would be
 // the spelling that did not resolve, and an unresolved reference is skipped
 // here as another registry's rather than reported, so it would go quiet.
-async function findProjectByNamespace(ns: string, projects: Array<{ id: string; name: string; slug?: string }>): Promise<{ id: string; ns: string } | null> {
+async function findProjectByNamespace(
+  ns: string,
+  projects: Array<{ id: string; name: string; slug?: string }>,
+): Promise<{ id: string; ns: string } | null> {
   const p = projects.find((x) => namespaceOf(x) === ns)
   return p ? { id: p.id, ns } : null
 }
@@ -1944,7 +1883,7 @@ if (auth) {
       continue
     }
     for (const hv of Object.values(entry.headers)) {
-      const m = /\\\$\\{([A-Za-z0-9_]+)\\}/.exec(String(hv))
+      const m = /\\$\\{([A-Za-z0-9_]+)\\}/.exec(String(hv))
       if (m && !process.env[m[1]]) {
         process.env[m[1]] = auth
       }
@@ -2036,7 +1975,11 @@ const MISSING_INSTALL_TARGET =
 // is told to add: one parameter, one route, one `npx` line.
 async function installScriptRoute(req: Request): Promise<Response> {
   const url = new URL(req.url)
-  const request = installRequestFrom(url.searchParams.get('component'), url.searchParams.get('project'), url.searchParams.get('name'))
+  const request = installRequestFrom(
+    url.searchParams.get('component'),
+    url.searchParams.get('project'),
+    url.searchParams.get('name'),
+  )
   if (!request) {
     return json({ error: MISSING_INSTALL_TARGET }, 400)
   }
@@ -2068,7 +2011,9 @@ async function installScriptRoute(req: Request): Promise<Response> {
     // error, and the reader's next step is the same either way.
     if (names.length === 0) {
       return json(
-        { error: `No components to install: project "${request.project}" has nothing published, or nothing answers to that name.` },
+        {
+          error: `No components to install: project "${request.project}" has nothing published, or nothing answers to that name.`,
+        },
         404,
       )
     }
@@ -2080,20 +2025,30 @@ async function installScriptRoute(req: Request): Promise<Response> {
       namespaces.add(ns)
     }
   }
-  const registryBase = new URL(httpRoute('registry'), url.origin).href
+  const registryBase = new URL(routeUrl('registry'), url.origin).href
   const required: Record<string, string> = {}
   for (const ns of namespaces) {
     required[`@${ns}`] = `${registryBase}?project=${ns}&name={name}`
   }
 
-  const script = installScriptSource(required, names.map((name) => `@${topNs}/${name}`))
+  const script = installScriptSource(
+    required,
+    names.map((name) => `@${topNs}/${name}`),
+  )
   const label = request.kind === 'component' ? request.name : 'all'
   const tarball = await buildPackageTarball([
-    { name: 'package.json', content: JSON.stringify({ name: `design-kit-install-${topNs}-${label}`, version: '1.0.0', bin: { install: './cli.js' } }, null, 2) },
+    {
+      name: 'package.json',
+      content: JSON.stringify(
+        { name: `design-kit-install-${topNs}-${label}`, version: '1.0.0', bin: { install: './cli.js' } },
+        null,
+        2,
+      ),
+    },
     { name: 'cli.js', content: script },
   ])
 
-  return new Response(tarball, {
+  return new Response(new Uint8Array(tarball), {
     status: 200,
     headers: { 'content-type': 'application/octet-stream', 'access-control-allow-origin': '*' },
   })
@@ -2109,12 +2064,15 @@ async function installScriptRoute(req: Request): Promise<Response> {
 // CLI resolves registryDependencies on install, but into the eval pool instead
 // of onto disk.
 
-const PREVIEW_SOURCE = (f: StoredFile): boolean => f.type !== 'registry:ignore' && !(f.target || f.path).startsWith('docs/')
+const PREVIEW_SOURCE = (f: StoredFile): boolean =>
+  f.type !== 'registry:ignore' && !(f.target || f.path).startsWith('docs/')
 
 // Structural parameter (the same shape componentFiles takes) so the preview
 // validator can be handed this function without knowing the full stored record.
 function previewSourceFiles(c: { name: string; type: string; files?: StoredFile[]; source?: string }): string[] {
-  return componentFiles(c).filter(PREVIEW_SOURCE).map((f) => f.content)
+  return componentFiles(c)
+    .filter(PREVIEW_SOURCE)
+    .map((f) => f.content)
 }
 
 // The `@/…` alias-import scan lives in dependency-graph.ts (imported above):
@@ -2206,8 +2164,8 @@ async function buildPreviewPool(projectId: string): Promise<PoolGroup[]> {
   }
 
   // 2) walk each pooled component's dependencies (breadth-first).
-  while (queue.length > 0) {
-    const { comp, ns } = queue.shift()!
+  for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+    const { comp, ns } = next
     // Explicit registryDependencies: `@ns/name` → design-kit; bare → shadcn.
     for (const dep of comp.registryDependencies ?? []) {
       const parsed = parseDep(dep, ns)
@@ -2248,7 +2206,11 @@ async function buildPreviewPool(projectId: string): Promise<PoolGroup[]> {
 
   // 3) shadcn primitives (transitive), skipping any name a design-kit component
   // already provides so a local `button` isn't shadowed by shadcn's.
-  const { sources } = await collectShadcnSources([...shadcnNames], (n) => localNames.has(n) || pulledNames.has(n), style)
+  const { sources } = await collectShadcnSources(
+    [...shadcnNames],
+    (n) => localNames.has(n) || pulledNames.has(n),
+    style,
+  )
   groups.push(...sources)
   return groups
 }
@@ -2317,7 +2279,12 @@ function warmPreviewPool(projectId: string): void {
 // Server-side preview validation — reuses buildPreviewSources, the DB-backed
 // component reader, and the pool-group builder above; see server/validate.ts
 // for the eval/render pipeline itself.
-const { validateComponent } = createValidator({ readComponents: readEffectiveViaDb, buildPreviewSources, previewSourceFiles, bundleDep })
+const { validateComponent } = createValidator({
+  readComponents: readEffectiveViaDb,
+  buildPreviewSources,
+  previewSourceFiles,
+  bundleDep,
+})
 
 // The dependency graph behind the doc page and the graph view: same stored
 // records, same draft-first read the previews use, and — unlike the walks
@@ -2344,7 +2311,7 @@ const lastValidationKey = (projectId: string): string => `last-validation:${proj
 type StoredValidationSummary = Omit<ValidationSummary, 'failed'> & { failed: unknown[] }
 
 const readSummaries = async (projectId: string): Promise<Record<string, StoredValidationSummary>> =>
-  (await host.storage.get<Record<string, StoredValidationSummary>>(lastValidationKey(projectId))) ?? {}
+  (await storage.get<Record<string, StoredValidationSummary>>(lastValidationKey(projectId))) ?? {}
 
 /**
  * A component's stable id, on whichever store holds the project — the key its
@@ -2358,16 +2325,23 @@ async function componentIdOf(projectId: string, name: string): Promise<string | 
     : (await readComponents(projectId)).find((c) => c.name === name)?.id
 }
 
-async function recordValidationSummary(projectId: string, componentId: string | undefined, result: ValidateComponentResult): Promise<void> {
+async function recordValidationSummary(
+  projectId: string,
+  componentId: string | undefined,
+  result: ValidateComponentResult,
+): Promise<void> {
   if (!componentId) {
     return
   }
   const map = await readSummaries(projectId)
   map[componentId] = summarizeValidation(result.targets ?? [], Date.now())
-  await host.storage.set(lastValidationKey(projectId), map)
+  await storage.set(lastValidationKey(projectId), map)
 }
 
-async function lastValidationOf(projectId: string, componentId: string | undefined): Promise<ValidationSummary | undefined> {
+async function lastValidationOf(
+  projectId: string,
+  componentId: string | undefined,
+): Promise<ValidationSummary | undefined> {
   if (!componentId) {
     return undefined
   }
@@ -2406,7 +2380,14 @@ async function validateAfterWrite(projectId: string, name: string): Promise<Vali
       verdict: 'unverified',
       summary: 'Not validated: the component was not found when validation ran.',
       poolDiagnostics: [],
-      targets: [{ target: 'source', outcome: 'unverifiable', error: 'component not found when validation ran', unresolvedImports: [] }],
+      targets: [
+        {
+          target: 'source',
+          outcome: 'unverifiable',
+          error: 'component not found when validation ran',
+          unresolvedImports: [],
+        },
+      ],
     }
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)
@@ -2451,5 +2432,11 @@ export const routes = {
   // bundles, standalone data. See server/preview.ts.
   // The preview serves the kit's own iframe, not an installer, so it is
   // handed the authoring view — the same list the validator and the editor see.
-  ...createPreviewRoutes({ readComponentsViaDb: readEffectiveViaDb, readProjectsViaDb, resolveProject, componentFiles, buildPreviewSources }),
+  ...createPreviewRoutes({
+    readComponentsViaDb: readEffectiveViaDb,
+    readProjectsViaDb,
+    resolveProject,
+    componentFiles,
+    buildPreviewSources,
+  }),
 }

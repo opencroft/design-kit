@@ -1,7 +1,8 @@
-import { icons, React } from '@ext/host'
+import { absoluteUrl, routeUrl } from '@opencroft/client/extension'
+import { FileText, History } from 'lucide-react'
+import { useMemo, useState } from 'react'
 
 import type { PoolGroup, PreviewScope } from '../../preview-runtime/protocol'
-import { httpRoute } from '../http-route'
 import { DocView } from '../live/mdx'
 import type { RegistryItem } from '../registry'
 import { ComponentDocHeader } from './component-doc-header'
@@ -20,13 +21,26 @@ import { SourceButton } from './source-button'
 // sidebar; this page has no right rail (the one aside it has is the project's
 // component tree), so the strip goes at the top of the body instead. Same
 // control, same choice, the one place it could go here.
-const { FileText, History } = icons
-
 type DocTab = 'doc' | 'history'
 
-export function ComponentDoc({ item, namespace, projectId, sources, onOpenEditor }: { item: RegistryItem; namespace: string; projectId: string; sources: PoolGroup[]; onOpenEditor?: () => void }) {
-  const [tab, setTab] = React.useState<DocTab>('doc')
-  const scope = React.useMemo<PreviewScope>(() => ({ sources, dependencies: item.dependencies }), [sources, item.dependencies])
+export function ComponentDoc({
+  item,
+  namespace,
+  projectId,
+  sources,
+  onOpenEditor,
+}: {
+  item: RegistryItem
+  namespace: string
+  projectId: string
+  sources: PoolGroup[]
+  onOpenEditor?: () => void
+}) {
+  const [tab, setTab] = useState<DocTab>('doc')
+  const scope = useMemo<PreviewScope>(
+    () => ({ sources, dependencies: item.dependencies }),
+    [sources, item.dependencies],
+  )
 
   return (
     <div className='space-y-8'>
@@ -38,11 +52,7 @@ export function ComponentDoc({ item, namespace, projectId, sources, onOpenEditor
         actions={
           <>
             <SourceButton onOpenEditor={onOpenEditor} />
-            <InstallButton
-              name={item.name}
-              namespace={namespace}
-              httpUrl={new URL(httpRoute(), window.location.origin).href}
-            />
+            <InstallButton name={item.name} namespace={namespace} httpUrl={absoluteUrl(routeUrl(''))} />
           </>
         }
       />
@@ -63,7 +73,13 @@ export function ComponentDoc({ item, namespace, projectId, sources, onOpenEditor
             <div className='space-y-8'>
               {item.signature && <Markdown source={item.signature} />}
               {item.doc ? (
-                <DocView mdx={item.doc.mdx} files={item.doc.files} scope={scope} projectId={projectId} component={item.name} />
+                <DocView
+                  mdx={item.doc.mdx}
+                  files={item.doc.files}
+                  scope={scope}
+                  projectId={projectId}
+                  component={item.name}
+                />
               ) : (
                 <p className='text-sm text-muted-foreground'>No documentation yet.</p>
               )}

@@ -1,5 +1,5 @@
-import { icons, React } from '@ext/host'
-import { Button } from '@ext/ui'
+import { Button } from '@opencroft/client/ui'
+import { History, X } from 'lucide-react'
 
 // A publish refused because the component moved underneath the editor. Amber,
 // not red — nothing is broken and nothing is lost — and a different component from the
@@ -7,12 +7,13 @@ import { Button } from '@ext/ui'
 // different words, and a different colour so the two are never read as one
 // event. Recovery is manual by design — the panel says what Reload does
 // BEFORE it is pressed.
-const { History, X } = icons
 
 export interface StalenessInfo {
   /** The version that is published now. */
   publishedVersion: number
-  /** The version the open editor was built on. */
+  /** The version the open editor was built on: 0 when the draft was started
+   *  before the component was first published, which is the number the store
+   *  itself answers for a component with no published version. */
   baseVersion: number
   /** Already formatted — this panel does not decide how a time reads. */
   publishedAt: string
@@ -53,14 +54,26 @@ export function SourceEditorStaleness({
       <div className='flex items-start gap-2'>
         <History aria-hidden='true' className='mt-0.5 size-4 shrink-0 text-amber-600' />
         <div className='min-w-0 flex-1'>
-          <p className='text-sm font-medium text-foreground'>Someone published this component while you were editing.</p>
+          <p className='text-sm font-medium text-foreground'>
+            Someone published this component while you were editing.
+          </p>
           <p className='pt-0.5 text-xs break-words text-muted-foreground'>
             It is now v{publishedVersion}, published at {publishedAt}
-            {publishedBy ? ` — by ${publishedBy}` : ''}. Your version was built on v{baseVersion}.
+            {publishedBy ? ` — by ${publishedBy}` : ''}.{' '}
+            {baseVersion > 0
+              ? `Your version was built on v${baseVersion}.`
+              : 'Your draft was started before it was first published.'}
           </p>
         </div>
         {onDismiss ? (
-          <Button type='button' variant='ghost' size='icon' className='size-6 shrink-0' aria-label='Dismiss' onClick={onDismiss}>
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            className='size-6 shrink-0'
+            aria-label='Dismiss'
+            onClick={onDismiss}
+          >
             <X className='size-3.5' />
           </Button>
         ) : null}
@@ -72,8 +85,8 @@ export function SourceEditorStaleness({
           Reload latest
         </Button>
         <p className='min-w-0 text-xs break-words text-muted-foreground'>
-          It opens v{publishedVersion} in the editor and keeps your changes. Every file you had changed is marked, and you copy across what you want,
-          one file at a time. Nothing is merged for you.
+          It opens v{publishedVersion} in the editor and keeps your changes. Every file you had changed is marked, and
+          you copy across what you want, one file at a time. Nothing is merged for you.
         </p>
       </div>
     </div>

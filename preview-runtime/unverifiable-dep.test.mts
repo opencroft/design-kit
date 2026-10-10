@@ -38,15 +38,15 @@ test('depPackageName keeps a scope but stops at the first subpath segment', () =
 
 test('an unverifiable-dependency marker becomes a reason naming the dependency and reassuring about the component', () => {
   const workspace = unverifiableDepReason(unverifiableDepError('workspace-package', 'agent-chat/components/ui/widget'))
-  assert.notEqual(workspace, null)
-  assert.match(workspace!, /agent-chat\/components\/ui\/widget/)
-  assert.match(workspace!, /the component itself is fine/)
-  assert.doesNotMatch(workspace!, new RegExp(UNVERIFIABLE_DEP_MARKER))
+  assert.ok(workspace !== null)
+  assert.match(workspace, /agent-chat\/components\/ui\/widget/)
+  assert.match(workspace, /the component itself is fine/)
+  assert.doesNotMatch(workspace, new RegExp(UNVERIFIABLE_DEP_MARKER))
 
   const browser = unverifiableDepReason(unverifiableDepError('browser-global', 'react-markdown'))
-  assert.notEqual(browser, null)
-  assert.match(browser!, /react-markdown/)
-  assert.match(browser!, /browser preview/)
+  assert.ok(browser !== null)
+  assert.match(browser, /react-markdown/)
+  assert.match(browser, /browser preview/)
 })
 
 test('a real error is never read as the marker — or the branch would turn a defect green', () => {
@@ -65,8 +65,14 @@ test('the placeholder throws the marker only when an export is CALLED (rendered)
   // not throw); only rendering it does.
   assert.equal(typeof Default, 'function')
   assert.equal(typeof Named, 'function')
-  assert.throws(() => Default(), (e: Error) => unverifiableDepReason(e.message) !== null)
-  assert.throws(() => Named(), (e: Error) => /agent-chat\/components\/x/.test(e.message))
+  assert.throws(
+    () => Default(),
+    (e: Error) => unverifiableDepReason(e.message) !== null,
+  )
+  assert.throws(
+    () => Named(),
+    (e: Error) => /agent-chat\/components\/x/.test(e.message),
+  )
   // Symbol access (module-interop probes) is undefined, not a throwing stand-in.
   assert.equal((mod as Record<symbol, unknown>)[Symbol.iterator], undefined)
 })

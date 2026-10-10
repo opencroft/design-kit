@@ -29,7 +29,6 @@ const TAG_NAMES = ['Preview', 'Sheet', 'Example'] as const
 // these too.
 function evalExpr(expr: string): unknown {
   try {
-    // eslint-disable-next-line no-new-func
     return new Function(`return (${expr});`)()
   } catch {
     return undefined
@@ -168,7 +167,9 @@ function attrStr(v: unknown): string | undefined {
 }
 
 function attrExpr(v: unknown): unknown {
-  return v && typeof v === 'object' && '__expr' in (v as Record<string, unknown>) ? evalExpr((v as { __expr: string }).__expr) : v
+  return v && typeof v === 'object' && '__expr' in (v as Record<string, unknown>)
+    ? evalExpr((v as { __expr: string }).__expr)
+    : v
 }
 
 export function parseDoc(src: string): DocSegment[] {
@@ -197,10 +198,19 @@ export function parseDoc(src: string): DocSegment[] {
     pos = slash + 2 // past `/>`
     if (tag.name === 'Preview') {
       const controls = attrExpr(attrs.controls)
-      segments.push({ kind: 'preview', src: attrStr(attrs.src) ?? '', controls: Array.isArray(controls) ? (controls as ControlSpec[]) : [] })
+      segments.push({
+        kind: 'preview',
+        src: attrStr(attrs.src) ?? '',
+        controls: Array.isArray(controls) ? (controls as ControlSpec[]) : [],
+      })
     } else if (tag.name === 'Sheet') {
       const values = attrExpr(attrs.values)
-      segments.push({ kind: 'sheet', prop: attrStr(attrs.prop) ?? '', values: Array.isArray(values) ? values : [], title: attrStr(attrs.title) })
+      segments.push({
+        kind: 'sheet',
+        prop: attrStr(attrs.prop) ?? '',
+        values: Array.isArray(values) ? values : [],
+        title: attrStr(attrs.title),
+      })
     } else if (tag.name === 'Example') {
       segments.push({ kind: 'example', src: attrStr(attrs.src) ?? '', title: attrStr(attrs.title) })
     }

@@ -6,7 +6,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { componentRefFromQuery, formatComponentRef, parseComponentRef, projectFromQuery, stripItemSuffix } from './component-ref.ts'
+import {
+  componentRefFromQuery,
+  formatComponentRef,
+  parseComponentRef,
+  projectFromQuery,
+  stripItemSuffix,
+} from './component-ref.ts'
 
 const query = (search: string) => new URL(`https://example.invalid/r${search}`)
 
@@ -31,7 +37,17 @@ test('only the first separator divides, so hyphens and later dots stay in the na
 })
 
 test('a reference with only one half is not a reference', () => {
-  for (const raw of ['status-indicator', 'acme/', 'acme.', '/status-indicator', '.status-indicator', '', '   ', null, undefined]) {
+  for (const raw of [
+    'status-indicator',
+    'acme/',
+    'acme.',
+    '/status-indicator',
+    '.status-indicator',
+    '',
+    '   ',
+    null,
+    undefined,
+  ]) {
     assert.equal(parseComponentRef(raw), null, `expected ${JSON.stringify(raw)} to be rejected`)
   }
 })
@@ -67,9 +83,18 @@ test('a reference is written with the dot, and reads back as itself', () => {
 // ── reading a reference off a URL ────────────────────────────────────
 
 test('a route reads the component from a reference, or from the separate pair', () => {
-  assert.deepEqual(componentRefFromQuery(query('?component=acme.status-indicator')), { project: 'acme', name: 'status-indicator' })
-  assert.deepEqual(componentRefFromQuery(query('?project=acme&name=status-indicator')), { project: 'acme', name: 'status-indicator' })
-  assert.deepEqual(componentRefFromQuery(query('?project=acme&name=status-indicator.json')), { project: 'acme', name: 'status-indicator' })
+  assert.deepEqual(componentRefFromQuery(query('?component=acme.status-indicator')), {
+    project: 'acme',
+    name: 'status-indicator',
+  })
+  assert.deepEqual(componentRefFromQuery(query('?project=acme&name=status-indicator')), {
+    project: 'acme',
+    name: 'status-indicator',
+  })
+  assert.deepEqual(componentRefFromQuery(query('?project=acme&name=status-indicator.json')), {
+    project: 'acme',
+    name: 'status-indicator',
+  })
 })
 
 test('half a pair addresses nothing', () => {

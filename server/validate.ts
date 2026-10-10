@@ -6,11 +6,20 @@ import { moduleResolver, type NpmModule, npmModuleKey, undeclaredPackages } from
 import { createEvalCore, npmModules, parseImports } from '../preview-runtime/eval-core'
 import { buildProjectExports } from '../preview-runtime/project-exports'
 import type { PoolGroup } from '../preview-runtime/protocol'
-import { coerceValue, defaultProps, type DocSegment, parseDoc, resolveSrc } from '../src/live/doc-parser'
+import { unverifiableDepModule, unverifiableDepReason } from '../preview-runtime/unverifiable-dep'
+import { coerceValue, type DocSegment, defaultProps, parseDoc, resolveSrc } from '../src/live/doc-parser'
 import { CONTROL_KINDS, type DocCoverage, docCoverage, truncatedMessage, unknownControlKinds } from './doc-coverage'
 import { loadDep } from './eval-loader'
-import { unverifiableDepModule, unverifiableDepReason } from '../preview-runtime/unverifiable-dep'
-import { type ComponentVerdict, DEPENDENCIES_TARGET, isRenderTarget, judge, RENDER_TARGET, SOURCE_TARGET, type TargetOutcome, type ValidateTarget } from './verdict'
+import {
+  type ComponentVerdict,
+  DEPENDENCIES_TARGET,
+  isRenderTarget,
+  judge,
+  RENDER_TARGET,
+  SOURCE_TARGET,
+  type TargetOutcome,
+  type ValidateTarget,
+} from './verdict'
 
 export type { ComponentVerdict, TargetOutcome, ValidateTarget } from './verdict'
 
@@ -240,7 +249,12 @@ export function createValidator(deps: ValidateDeps) {
     // it is the only check a component with no docs and no targets would
     // otherwise get.
     if (ownFiles.length === 0) {
-      targets.push({ target: SOURCE_TARGET, outcome: 'unverifiable', error: 'no preview source files on this component', unresolvedImports: [] })
+      targets.push({
+        target: SOURCE_TARGET,
+        outcome: 'unverifiable',
+        error: 'no preview source files on this component',
+        unresolvedImports: [],
+      })
     } else {
       const own = core.evalComponentExports(ownFiles, resolve, modules)
       targets.push({
@@ -285,7 +299,10 @@ export function createValidator(deps: ValidateDeps) {
 
     // One shared instance resolved once per component, reused by both the
     // <Preview> target and every <Sheet> that sweeps it.
-    let previewComp: { value: React.ComponentType<Record<string, unknown>>; unresolved: string[] } | { error: string; unresolved: string[] } | null = null
+    let previewComp:
+      | { value: React.ComponentType<Record<string, unknown>>; unresolved: string[] }
+      | { error: string; unresolved: string[] }
+      | null = null
     const resolvePreviewComp = (): typeof previewComp => {
       if (previewComp || previewCode == null) {
         return previewComp
@@ -303,16 +320,30 @@ export function createValidator(deps: ValidateDeps) {
       if (seg.kind === 'preview') {
         const code = resolveSrc(docs, seg.src)
         if (code == null) {
-          targets.push({ target: 'preview', outcome: 'error', error: `missing file: ${seg.src}`, unresolvedImports: [] })
+          targets.push({
+            target: 'preview',
+            outcome: 'error',
+            error: `missing file: ${seg.src}`,
+            unresolvedImports: [],
+          })
           continue
         }
         const resolved = resolvePreviewComp()
         if (!resolved || 'error' in resolved) {
           const error = resolved?.error ?? 'unknown error'
-          targets.push({ target: 'preview', outcome: outcomeOf(error), error, unresolvedImports: resolved?.unresolved ?? [] })
+          targets.push({
+            target: 'preview',
+            outcome: outcomeOf(error),
+            error,
+            unresolvedImports: resolved?.unresolved ?? [],
+          })
           continue
         }
-        targets.push(renderTarget('preview', resolved.unresolved, () => renderToString(React.createElement(resolved.value, defaultProps(seg.controls)))))
+        targets.push(
+          renderTarget('preview', resolved.unresolved, () =>
+            renderToString(React.createElement(resolved.value, defaultProps(seg.controls))),
+          ),
+        )
       } else if (seg.kind === 'example') {
         const label = `example:${seg.src.replace(/^\.\//, '').replace(/^docs\//, '')}`
         const code = resolveSrc(docs, seg.src)
@@ -331,7 +362,12 @@ export function createValidator(deps: ValidateDeps) {
         const resolved = resolvePreviewComp()
         if (!resolved || 'error' in resolved) {
           const error = resolved?.error ?? 'sheet: no <Preview> in this doc supplies the component to sweep'
-          targets.push({ target: label, outcome: outcomeOf(error), error, unresolvedImports: resolved?.unresolved ?? [] })
+          targets.push({
+            target: label,
+            outcome: outcomeOf(error),
+            error,
+            unresolvedImports: resolved?.unresolved ?? [],
+          })
           continue
         }
         const kind = controls.find((c) => c.name === seg.prop)?.kind
@@ -347,13 +383,23 @@ export function createValidator(deps: ValidateDeps) {
           } else {
             props[seg.prop] = swept
           }
-          const entry = renderTarget(label, resolved.unresolved, () => renderToString(React.createElement(resolved.value, props)))
+          const entry = renderTarget(label, resolved.unresolved, () =>
+            renderToString(React.createElement(resolved.value, props)),
+          )
           if (entry.error) {
-            failure = { error: `entry "${raw === '' ? 'default' : String(raw)}": ${entry.error}`, outcome: entry.outcome }
+            failure = {
+              error: `entry "${raw === '' ? 'default' : String(raw)}": ${entry.error}`,
+              outcome: entry.outcome,
+            }
             break
           }
         }
-        targets.push({ target: label, outcome: failure?.outcome ?? 'ok', error: failure?.error, unresolvedImports: resolved.unresolved })
+        targets.push({
+          target: label,
+          outcome: failure?.outcome ?? 'ok',
+          error: failure?.error,
+          unresolvedImports: resolved.unresolved,
+        })
       }
     }
 
@@ -363,7 +409,12 @@ export function createValidator(deps: ValidateDeps) {
     // component with no doc page is the one nobody has previewed by hand
     // either, so the verdict is the only evidence anyone has about it.
     if (!targets.some((t) => isRenderTarget(t.target))) {
-      targets.push({ target: RENDER_TARGET, outcome: 'unverifiable', error: renderAbsenceReason(coverage), unresolvedImports: [] })
+      targets.push({
+        target: RENDER_TARGET,
+        outcome: 'unverifiable',
+        error: renderAbsenceReason(coverage),
+        unresolvedImports: [],
+      })
     }
 
     return {
@@ -374,7 +425,10 @@ export function createValidator(deps: ValidateDeps) {
     }
   }
 
-  async function validateComponent(projectId: string, name?: string): Promise<{ components: ValidateComponentResult[] }> {
+  async function validateComponent(
+    projectId: string,
+    name?: string,
+  ): Promise<{ components: ValidateComponentResult[] }> {
     const all = await deps.readComponents(projectId)
     const targets = name ? all.filter((c) => c.name === name) : all
     if (name && targets.length === 0) {

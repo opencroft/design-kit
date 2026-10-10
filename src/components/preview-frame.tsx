@@ -1,7 +1,13 @@
-import { React, routeUrl } from '@ext/host'
-
-import { type FrameMessage, isPreviewMessage, PREVIEW_CHANNEL, type RenderPayload } from '../../preview-runtime/protocol'
+import { routeUrl } from '@opencroft/client/extension'
 import { cn } from 'cn'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import {
+  type FrameMessage,
+  isPreviewMessage,
+  PREVIEW_CHANNEL,
+  type RenderPayload,
+} from '../../preview-runtime/protocol'
 
 // The isolated preview surface: an iframe served by this extension's preview
 // routes. Host styles cannot leak in (and design styles cannot leak out); the
@@ -15,8 +21,8 @@ import { cn } from 'cn'
 
 /** Track the dashboard's dark mode (the host toggles `.dark` on <html>). */
 export function useHostDark(): boolean {
-  const [dark, setDark] = React.useState(() => document.documentElement.classList.contains('dark'))
-  React.useEffect(() => {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  useEffect(() => {
     const observer = new MutationObserver(() => {
       setDark(document.documentElement.classList.contains('dark'))
     })
@@ -52,18 +58,28 @@ export interface PreviewFrameProps {
   className?: string
 }
 
-export function PreviewFrame({ payload, projectId, minHeight = 208, collapsedMax = 640, className }: PreviewFrameProps) {
+export function PreviewFrame({
+  payload,
+  projectId,
+  minHeight = 208,
+  collapsedMax = 640,
+  className,
+}: PreviewFrameProps) {
   const dark = useHostDark()
-  const iframeRef = React.useRef<HTMLIFrameElement>(null)
-  const [ready, setReady] = React.useState(false)
-  const [contentHeight, setContentHeight] = React.useState(0)
-  const [expanded, setExpanded] = React.useState(false)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [ready, setReady] = useState(false)
+  const [contentHeight, setContentHeight] = useState(0)
+  const [expanded, setExpanded] = useState(false)
 
   // The frame is themed at load time from the query; later toggles go over
   // postMessage. Freeze the src so a dark-mode flip doesn't reload the frame.
-  const [src] = React.useState(() => routeUrl(`preview/?project=${encodeURIComponent(projectId)}${document.documentElement.classList.contains('dark') ? '&dark=1' : ''}`))
+  const [src] = useState(() =>
+    routeUrl(
+      `preview/?project=${encodeURIComponent(projectId)}${document.documentElement.classList.contains('dark') ? '&dark=1' : ''}`,
+    ),
+  )
 
-  const post = React.useCallback((msg: Record<string, unknown>) => {
+  const post = useCallback((msg: Record<string, unknown>) => {
     iframeRef.current?.contentWindow?.postMessage({ channel: PREVIEW_CHANNEL, ...msg }, window.location.origin)
   }, [])
 
@@ -72,10 +88,10 @@ export function PreviewFrame({ payload, projectId, minHeight = 208, collapsedMax
   // as `undefined` and latch the error boundary); show the loader instead.
   const hasSources = payload.sources.length > 0
 
-  const payloadRef = React.useRef(payload)
+  const payloadRef = useRef(payload)
   payloadRef.current = payload
 
-  React.useEffect(() => {
+  useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow || !isPreviewMessage(event.data)) {
         return
@@ -94,13 +110,13 @@ export function PreviewFrame({ payload, projectId, minHeight = 208, collapsedMax
     return () => window.removeEventListener('message', onMessage)
   }, [post])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (ready && hasSources) {
       post({ type: 'render', payload })
     }
   }, [ready, hasSources, payload, post])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (ready) {
       post({ type: 'dark', dark })
     }
@@ -118,17 +134,29 @@ export function PreviewFrame({ payload, projectId, minHeight = 208, collapsedMax
           utilities can't leak in, a design's Tailwind can't leak out) — not a
           security boundary. */}
       <iframe ref={iframeRef} src={src} title='Component preview' className='block h-full w-full border-0' />
-      {(!ready || !hasSources) && <div className='pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-muted-foreground'>Loading preview…</div>}
+      {(!ready || !hasSources) && (
+        <div className='pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-muted-foreground'>
+          Loading preview…
+        </div>
+      )}
       {capped && (
         <div className='absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-background to-transparent pb-2 pt-8'>
-          <button type='button' onClick={() => setExpanded(true)} className='rounded-full border bg-background px-3 py-1 text-xs font-medium shadow-sm transition-colors hover:bg-muted'>
+          <button
+            type='button'
+            onClick={() => setExpanded(true)}
+            className='rounded-full border bg-background px-3 py-1 text-xs font-medium shadow-sm transition-colors hover:bg-muted'
+          >
             Show all ({contentHeight}px)
           </button>
         </div>
       )}
       {overflows && expanded && (
         <div className='absolute inset-x-0 bottom-0 z-10 flex justify-center pb-2'>
-          <button type='button' onClick={() => setExpanded(false)} className='rounded-full border bg-background px-3 py-1 text-xs font-medium shadow-sm transition-colors hover:bg-muted'>
+          <button
+            type='button'
+            onClick={() => setExpanded(false)}
+            className='rounded-full border bg-background px-3 py-1 text-xs font-medium shadow-sm transition-colors hover:bg-muted'
+          >
             Collapse
           </button>
         </div>

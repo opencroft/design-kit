@@ -21,18 +21,19 @@ export interface ShapedProject {
  * the registry item — so that answering "has this changed?" never requires
  * fetching the item to find out.
  *
- * `updatedAt` is milliseconds since the epoch, and every component record
- * carries one, so it is always present.
+ * `updatedAt` is milliseconds since the epoch. Every record in the
+ * storage-backed store carries one; a record from a repository-backed project
+ * does not, and the field is then absent from the response.
  * `version` comes from the publish layer and is omitted while a record has
  * none: an absent field says "this library does not version yet", where a
  * defaulted number would say "published exactly that many times" and be wrong.
  */
 export interface ChangeSignals {
-  updatedAt: number
+  updatedAt?: number
   version?: number
 }
 
-export function changeSignals(component: { updatedAt: number; version?: number }): ChangeSignals {
+export function changeSignals(component: { updatedAt?: number; version?: number }): ChangeSignals {
   return typeof component.version === 'number'
     ? { updatedAt: component.updatedAt, version: component.version }
     : { updatedAt: component.updatedAt }
@@ -82,7 +83,15 @@ export function shapeProjects(
 }
 
 export function shapeIndexItem(
-  component: { id: string; name: string; type: string; title: string; description: string; updatedAt: number; version?: number },
+  component: {
+    id: string
+    name: string
+    type: string
+    title: string
+    description: string
+    updatedAt?: number
+    version?: number
+  },
   files: Array<{ path: string; target: string; type: string }>,
 ): ShapedIndexItem {
   return {

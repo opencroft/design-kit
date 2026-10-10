@@ -53,8 +53,13 @@ export function requireBridgePlugin(externals: readonly string[]): Plugin {
   return {
     name: 'design-kit-require-bridge',
     setup(build) {
-      build.onResolve({ filter }, (args) => (args.kind === 'require-call' ? { path: args.path, namespace: REQUIRE_BRIDGE_NAMESPACE } : undefined))
-      build.onLoad({ filter: /.*/, namespace: REQUIRE_BRIDGE_NAMESPACE }, (args) => ({ contents: requireBridgeSource(args.path), loader: 'js' }))
+      build.onResolve({ filter }, (args) =>
+        args.kind === 'require-call' ? { path: args.path, namespace: REQUIRE_BRIDGE_NAMESPACE } : undefined,
+      )
+      build.onLoad({ filter: /.*/, namespace: REQUIRE_BRIDGE_NAMESPACE }, (args) => ({
+        contents: requireBridgeSource(args.path),
+        loader: 'js',
+      }))
     },
   }
 }

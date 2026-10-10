@@ -1,5 +1,5 @@
-import { icons, React } from '@ext/host'
-import { Button } from '@ext/ui'
+import { Button } from '@opencroft/client/ui'
+import { X, XCircle } from 'lucide-react'
 
 // A publish that did not complete. The act failed — nothing examined the work
 // and turned it down. That is the distinction this panel exists to hold, and it is said in
@@ -9,7 +9,6 @@ import { Button } from '@ext/ui'
 // publishing stopped, what became of the work, and what the system actually
 // said. The third is the one a toast destroys — gone before anyone has decided
 // whether it mattered, and the first thing the next person will ask for.
-const { X, XCircle } = icons
 
 export interface PublishErrorInfo {
   /** What the system said, as it said it. Not rewritten into something
@@ -27,7 +26,12 @@ export interface SourceEditorPublishErrorProps extends PublishErrorInfo {
   onDismiss?: () => void
 }
 
-export function SourceEditorPublishError({ message, publishedVersion, onRetry, onDismiss }: SourceEditorPublishErrorProps) {
+export function SourceEditorPublishError({
+  message,
+  publishedVersion,
+  onRetry,
+  onDismiss,
+}: SourceEditorPublishErrorProps) {
   return (
     <div
       // `alert` rather than the `status` its siblings carry, and the difference
@@ -49,7 +53,14 @@ export function SourceEditorPublishError({ message, publishedVersion, onRetry, o
           </p>
         </div>
         {onDismiss ? (
-          <Button type='button' variant='ghost' size='icon' className='size-6 shrink-0' aria-label='Dismiss' onClick={onDismiss}>
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            className='size-6 shrink-0'
+            aria-label='Dismiss'
+            onClick={onDismiss}
+          >
             <X className='size-3.5' />
           </Button>
         ) : null}
@@ -57,7 +68,9 @@ export function SourceEditorPublishError({ message, publishedVersion, onRetry, o
 
       {/* What the system said, kept rather than summarised, and selectable so
           it can be handed on. */}
-      <p className='mt-2 rounded-md border bg-background px-2 py-1.5 font-mono text-xs break-all text-foreground'>{message}</p>
+      <p className='mt-2 rounded-md border bg-background px-2 py-1.5 font-mono text-xs break-all text-foreground'>
+        {message}
+      </p>
 
       {/* `!`: the host stylesheet loads after this one and redefines the base
           display utilities, so a variant that overrides one needs the flag. */}
@@ -73,8 +86,8 @@ export function SourceEditorPublishError({ message, publishedVersion, onRetry, o
             mistake. */}
         <p className='min-w-0 text-xs break-words text-muted-foreground'>
           Nothing refused this: no check failed, and nobody else published while you were editing. The publish itself
-          did not finish, so it is a fault to report rather than something to fix in the component. If it happens
-          again, the message above is what someone will need.
+          did not finish, so it is a fault to report rather than something to fix in the component. If it happens again,
+          the message above is what someone will need.
         </p>
       </div>
     </div>

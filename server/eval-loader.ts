@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { access, mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import * as jsxRuntime from 'react/jsx-runtime'
 import * as React from 'react'
+import * as jsxRuntime from 'react/jsx-runtime'
 import * as ReactDOM from 'react-dom'
 import { createRoot } from 'react-dom/client'
 
@@ -32,7 +32,12 @@ import { createRoot } from 'react-dom/client'
 const EVAL_TMP_DIR = path.join(process.cwd(), '.eval-tmp')
 const STUB_NODE_MODULES = path.join(EVAL_TMP_DIR, 'node_modules')
 
-;(globalThis as Record<string, unknown>).__designKitEvalHost = { React, ReactDOM, ReactDOMClient: { createRoot }, jsxRuntime }
+;(globalThis as Record<string, unknown>).__designKitEvalHost = {
+  React,
+  ReactDOM,
+  ReactDOMClient: { createRoot },
+  jsxRuntime,
+}
 
 // Mirrors preview.ts's REACT_EXPORTS -- the browser shim's own list of names
 // an `import * as X from 'react'` needs available as properties of X, since

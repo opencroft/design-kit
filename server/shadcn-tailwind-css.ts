@@ -15,6 +15,10 @@
 // previews unstyled in exactly the states that matter.
 export const SHADCN_TAILWIND_CSS_VERSION = '4.21.0'
 
+// Raw so the next re-vendor can be pasted as it is: a backslash in it (an
+// escaped selector such as `.a\:b`) would otherwise be read as a string escape
+// and change the CSS without any error.
+// biome-ignore lint/complexity/noUselessStringRaw: keeps a verbatim paste of the vendored file verbatim
 export const SHADCN_TAILWIND_CSS = String.raw`@theme inline {
   @keyframes accordion-down {
     from {

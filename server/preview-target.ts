@@ -24,7 +24,7 @@
 // reaches a route, so it is exercised directly rather than through one.
 
 import type { PreviewMode } from '../preview-runtime/protocol.ts'
-import { defaultProps, docsRelative, type DocSegment, parseDoc, resolveSrc } from '../src/live/doc-parser.ts'
+import { type DocSegment, defaultProps, docsRelative, parseDoc, resolveSrc } from '../src/live/doc-parser.ts'
 
 export interface TargetFileLike {
   path?: string
@@ -103,18 +103,28 @@ export function isResolved(result: PreviewTargetResult): result is ResolvedPrevi
  * quietly shows a different block is what this exists to prevent, and doing
  * it here for the default would only move it.
  */
-export function resolvePreviewTarget(mdx: string, docs: Record<string, string>, requested: string | null | undefined): PreviewTargetResult {
+export function resolvePreviewTarget(
+  mdx: string,
+  docs: Record<string, string>,
+  requested: string | null | undefined,
+): PreviewTargetResult {
   const segments = parseDoc(mdx)
   const available = docTargets(mdx)
   const asked = String(requested ?? '').trim()
 
   const wantsDefault = asked === '' || asked === 'preview'
-  const addressable = segments.filter((s): s is Extract<DocSegment, { kind: 'preview' | 'example' }> => s.kind === 'preview' || s.kind === 'example')
-  const seg = wantsDefault ? addressable.find((s) => s.kind === 'preview') : addressable.find((s) => labelOf(s) === asked)
+  const addressable = segments.filter(
+    (s): s is Extract<DocSegment, { kind: 'preview' | 'example' }> => s.kind === 'preview' || s.kind === 'example',
+  )
+  const seg = wantsDefault
+    ? addressable.find((s) => s.kind === 'preview')
+    : addressable.find((s) => labelOf(s) === asked)
 
   if (!seg) {
     return {
-      error: wantsDefault ? 'This component has no <Preview> in its documentation.' : `No documented preview named "${asked}".`,
+      error: wantsDefault
+        ? 'This component has no <Preview> in its documentation.'
+        : `No documented preview named "${asked}".`,
       available,
     }
   }
@@ -128,7 +138,12 @@ export function resolvePreviewTarget(mdx: string, docs: Record<string, string>, 
     // The controls' defaults, and only those: a standalone page has no props
     // table to drive them, so the honest thing to show is the state the doc
     // page itself opens in.
-    return { target: `preview:${docsRelative(seg.src)}`, mode: 'default-export', code, props: defaultProps(seg.controls) }
+    return {
+      target: `preview:${docsRelative(seg.src)}`,
+      mode: 'default-export',
+      code,
+      props: defaultProps(seg.controls),
+    }
   }
   // `snippet`, matching how the doc page renders an <Example> (see
   // src/components/live-example.tsx) — an example is an expression evaluated

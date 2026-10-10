@@ -93,7 +93,7 @@ test('a rejected shared prefix is not cached either', async () => {
 
 test('concurrent readers of one key share a single in-flight build', async () => {
   let started = 0
-  let release: (() => void) | undefined
+  let release = () => {}
   const gate = new Promise<void>((resolve) => {
     release = resolve
   })
@@ -109,7 +109,7 @@ test('concurrent readers of one key share a single in-flight build', async () =>
   // Both asked before either could finish — the case the preview actually hits,
   // with the client action and the validator arriving on the same write.
   const both = Promise.all([cache.pool('p1'), cache.pool('p1')])
-  release!()
+  release()
   const [a, b] = await both
   assert.equal(started, 1)
   assert.deepEqual(a, [['pooled']])

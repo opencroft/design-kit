@@ -10,8 +10,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { resolveProjectRef } from './project-resolution.ts'
 import type { ProjectReaders, ResolvableProject } from './project-resolution.ts'
+import { resolveProjectRef } from './project-resolution.ts'
 import { slugify } from './target.ts'
 
 /** Renamed after it was created: the display name no longer carries the slug. */
@@ -81,7 +81,11 @@ test('a renamed instance does NOT answer to its slugified display name', async (
   const resolved = await resolveProjectRef(slugify(RENAMED.name), read)
 
   assert.notEqual(resolved.id, RENAMED.instanceId, 'the display-name form must not reach the project')
-  assert.deepEqual(resolved, { id: 'second-name', ns: 'second-name' }, 'it resolves to nothing, and the caller reports the miss')
+  assert.deepEqual(
+    resolved,
+    { id: 'second-name', ns: 'second-name' },
+    'it resolves to nothing, and the caller reports the miss',
+  )
 })
 
 test('an aligned instance answers to the form that is both its slug and its slugified name', async () => {
@@ -117,7 +121,10 @@ test('a legacy row answers to its id', async () => {
 test('a value naming no project resolves to nothing and echoes itself', async () => {
   const { read } = world()
 
-  assert.deepEqual(await resolveProjectRef('nothing-of-that-name', read), { id: 'nothing-of-that-name', ns: 'nothing-of-that-name' })
+  assert.deepEqual(await resolveProjectRef('nothing-of-that-name', read), {
+    id: 'nothing-of-that-name',
+    ns: 'nothing-of-that-name',
+  })
 })
 
 test('resolving by slug reads neither the alias table nor the project list', async () => {

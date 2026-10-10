@@ -1,4 +1,4 @@
-import { React } from '@ext/host'
+import { useEffect } from 'react'
 
 // Escape closes a dialog, and what it closes it to is fixed here rather than
 // chosen per caller.
@@ -26,7 +26,7 @@ import { React } from '@ext/host'
 // existing keyboard reflex: the panel would need focus inside it to see the
 // key, and a reader who clicked the backdrop has focus nowhere in particular.
 export function useDismissOnEscape(active: boolean, onCancel?: () => void): void {
-  React.useEffect(() => {
+  useEffect(() => {
     // Bound to whether the dialog is on screen, so nothing is listening while
     // it is closed — an Escape pressed in the editor is not for a dialog that
     // is not there.

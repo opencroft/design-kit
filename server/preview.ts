@@ -1,4 +1,5 @@
-import host from '@ext/host'
+import { cacheDir } from '@opencroft/server/storage'
+import { execFile, fs, path } from '@opencroft/server/system'
 
 import type { NpmModule } from '../preview-runtime/declared-deps'
 import { depCacheKey } from '../preview-runtime/dep-url'
@@ -25,8 +26,8 @@ import { effectiveShadcnStyle, shadcnStyleCss } from './shadcn-style'
 declare const __dirname: string
 
 // ── injected storage access ──────────────────────────────────────────
-// index.ts owns the db-backed readers (routes lack the Start context that
-// host.storage needs); it passes them in to avoid a circular import.
+// index.ts owns the storage-backed readers (and the instance-repo ones); it
+// passes them in to avoid a circular import.
 
 export interface PreviewStoredFile {
   path: string
@@ -135,8 +136,20 @@ const RAMPS: Record<string, Ramp> = {
 const WHITE = 'oklch(1 0 0)'
 const DESTRUCTIVE_LIGHT = 'oklch(0.577 0.245 27.325)'
 const DESTRUCTIVE_DARK = 'oklch(0.704 0.191 22.216)'
-const CHART_LIGHT = ['oklch(0.646 0.222 41.116)', 'oklch(0.6 0.118 184.704)', 'oklch(0.398 0.07 227.392)', 'oklch(0.828 0.189 84.429)', 'oklch(0.769 0.188 70.08)']
-const CHART_DARK = ['oklch(0.488 0.243 264.376)', 'oklch(0.696 0.17 162.48)', 'oklch(0.769 0.188 70.08)', 'oklch(0.627 0.265 303.9)', 'oklch(0.645 0.246 16.439)']
+const CHART_LIGHT = [
+  'oklch(0.646 0.222 41.116)',
+  'oklch(0.6 0.118 184.704)',
+  'oklch(0.398 0.07 227.392)',
+  'oklch(0.828 0.189 84.429)',
+  'oklch(0.769 0.188 70.08)',
+]
+const CHART_DARK = [
+  'oklch(0.488 0.243 264.376)',
+  'oklch(0.696 0.17 162.48)',
+  'oklch(0.769 0.188 70.08)',
+  'oklch(0.627 0.265 303.9)',
+  'oklch(0.645 0.246 16.439)',
+]
 
 function block(selector: string, tokens: Record<string, string>): string {
   return `${selector} {\n${Object.entries(tokens)
@@ -322,7 +335,7 @@ async function buildRuntime(): Promise<{ code: string; hash: string }> {
     return runtimeCache
   }
   const esbuild = await loadEsbuild()
-  const entry = host.path.join(__dirname, 'preview-runtime', 'entry.tsx')
+  const entry = path.join(__dirname, 'preview-runtime', 'entry.tsx')
   const result = await esbuild.build({
     entryPoints: [entry],
     bundle: true,
@@ -355,8 +368,8 @@ let tailwindCache: string | null = null
 
 async function readTailwindBrowser(): Promise<string> {
   if (tailwindCache == null) {
-    const file = host.path.join(__dirname, 'node_modules', '@tailwindcss', 'browser', 'dist', 'index.global.js')
-    tailwindCache = await host.fs.readFile(file, 'utf-8')
+    const file = path.join(__dirname, 'node_modules', '@tailwindcss', 'browser', 'dist', 'index.global.js')
+    tailwindCache = await fs.readFile(file, 'utf-8')
   }
   return tailwindCache
 }
@@ -433,7 +446,7 @@ const RANGE_RE = /^[\w.^~<>=|* +-]{0,64}$/
 // another. The root holds nothing but these prefixes, so esbuild's upward
 // node_modules walk from one prefix never reaches another's packages.
 function installDir({ spec, range }: NpmModule): string {
-  return host.cacheDir('preview-npm', encodeURIComponent(`${depPackageName(spec)}@${range}`))
+  return cacheDir('preview-npm', encodeURIComponent(`${depPackageName(spec)}@${range}`))
 }
 
 const installInFlight = new Map<string, Promise<void>>()
@@ -458,10 +471,10 @@ let installQueue: Promise<unknown> = Promise.resolve()
 async function ensureInstalled(module: NpmModule): Promise<void> {
   const pkg = depPackageName(module.spec)
   const depsDir = installDir(module)
-  const installed = host.path.join(depsDir, 'node_modules', pkg, 'package.json')
+  const installed = path.join(depsDir, 'node_modules', pkg, 'package.json')
   const present = async (): Promise<boolean> => {
     try {
-      await host.fs.access(installed)
+      await fs.access(installed)
       return true
     } catch {
       return false
@@ -478,18 +491,18 @@ async function ensureInstalled(module: NpmModule): Promise<void> {
       if (await present()) {
         return
       }
-      await host.fs.mkdir(depsDir, { recursive: true })
-      const manifest = host.path.join(depsDir, 'package.json')
+      await fs.mkdir(depsDir, { recursive: true })
+      const manifest = path.join(depsDir, 'package.json')
       try {
-        await host.fs.access(manifest)
+        await fs.access(manifest)
       } catch {
-        await host.fs.writeFile(manifest, JSON.stringify({ name: 'design-kit-preview-deps', private: true }))
+        await fs.writeFile(manifest, JSON.stringify({ name: 'design-kit-preview-deps', private: true }))
       }
       // --ignore-scripts: bundling for the browser only ever reads files
       // (esbuild), never executes the package — running install/postinstall
       // scripts for an arbitrary URL-supplied package name would make this a
       // remote code-execution primitive.
-      await host.execFile('npm', [
+      await execFile('npm', [
         'install',
         module.range ? `${pkg}@${module.range}` : pkg,
         '--prefix',
@@ -549,7 +562,7 @@ export async function bundleDep(module: NpmModule): Promise<string> {
     external: DEP_EXTERNALS,
     plugins: [requireBridgePlugin(DEP_EXTERNALS)],
     loader: { '.css': 'empty' },
-    nodePaths: [host.path.join(depsDir, 'node_modules')],
+    nodePaths: [path.join(depsDir, 'node_modules')],
   })
   const code = result.outputFiles[0].text
   depBundleCache.set(cacheKey, code)
@@ -606,7 +619,10 @@ ${THEME_WIRING}${styleCss ? `\n${styleCss}` : ''}
 </head>
 <body><div id="root"></div></body>
 </html>`
-    return new Response(html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } })
+    return new Response(html, {
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+    })
   }
 
   async function runtimeRoute(): Promise<Response> {
@@ -670,9 +686,25 @@ ${THEME_WIRING}${styleCss ? `\n${styleCss}` : ''}
       // A component whose `docs/preview.tsx` no document points at still opens
       // on it. Below that, `null` — the frame renders the export bare.
       const bare = docs['preview.tsx'] ?? null
-      return jsonResponse({ sources, target: null, mode: 'default-export', code: bare, props: {}, exportName: comp.exportName, dependencies })
+      return jsonResponse({
+        sources,
+        target: null,
+        mode: 'default-export',
+        code: bare,
+        props: {},
+        exportName: comp.exportName,
+        dependencies,
+      })
     }
-    return jsonResponse({ sources, target: resolved.target, mode: resolved.mode, code: resolved.code, props: resolved.props ?? {}, exportName: comp.exportName, dependencies })
+    return jsonResponse({
+      sources,
+      target: resolved.target,
+      mode: resolved.mode,
+      code: resolved.code,
+      props: resolved.props ?? {},
+      exportName: comp.exportName,
+      dependencies,
+    })
   }
 
   const routes: Record<string, (req: Request) => Promise<Response>> = {

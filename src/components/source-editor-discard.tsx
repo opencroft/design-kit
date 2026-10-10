@@ -1,5 +1,4 @@
-import { React } from '@ext/host'
-import { Button } from '@ext/ui'
+import { Button } from '@opencroft/client/ui'
 
 import { useDismissOnEscape } from './use-dismiss-on-escape'
 
@@ -47,12 +46,18 @@ export function SourceEditorDiscard({ version, onDiscard, onCancel }: SourceEdit
     return null
   }
   return (
+    // A click on the backdrop is a pointer shortcut for "Keep the draft". The
+    // keyboard has the same answer through Escape and the focused button, so
+    // the backdrop takes no focus and no key of its own.
+    // biome-ignore lint/a11y/noStaticElementInteractions: pointer shortcut; the keyboard answers through Escape
+    // biome-ignore lint/a11y/useKeyWithClickEvents: pointer shortcut; the keyboard answers through Escape
     <div className='absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-4' onClick={onCancel}>
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: only keeps a click inside the panel from reaching the backdrop */}
       <div
         role='alertdialog'
         aria-label='Discard this draft?'
         className='@container w-full max-w-sm rounded-lg border bg-background p-4 shadow-lg'
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <p className='text-sm font-medium'>Discard this draft?</p>
         {/* Says what comes back rather than how much goes, on purpose. A count
@@ -61,13 +66,20 @@ export function SourceEditorDiscard({ version, onDiscard, onCancel }: SourceEdit
             files and is still a draft, so a number here would say "0" over a
             dialog about losing something. */}
         <p className='pt-1 text-xs break-words text-muted-foreground'>
-          Every file of this component goes back to v{version}. Anything in the draft that has not been published is lost, and this cannot be undone.
+          Every file of this component goes back to v{version}. Anything in the draft that has not been published is
+          lost, and this cannot be undone.
         </p>
         {/* Reversed, so the safe answer is under the thumb and the destructive
             one is furthest from it — the same arrangement as the leaving
             guard, for the same reason. */}
         <div className='flex flex-col-reverse gap-2 pt-3'>
-          <Button type='button' variant='ghost' size='sm' className='text-destructive hover:text-destructive' onClick={onDiscard}>
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            className='text-destructive hover:text-destructive'
+            onClick={onDiscard}
+          >
             Discard
           </Button>
           <Button type='button' size='sm' autoFocus onClick={onCancel}>

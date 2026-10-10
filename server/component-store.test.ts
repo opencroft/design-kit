@@ -17,6 +17,9 @@ function fakeStorage() {
     async set<T>(key: string, value: T): Promise<void> {
       data.set(key, value)
     },
+    async list(): Promise<string[]> {
+      return [...data.keys()]
+    },
   }
 }
 
@@ -201,14 +204,13 @@ test('a same-project rename is unaffected by projectExists, even if the current 
   assert.deepEqual(result, { moved: true, name: 'badge', project: 'project-a' })
 })
 
-test('a rename to the component\'s own current name is a no-op, not a self-collision', async () => {
+test("a rename to the component's own current name is a no-op, not a self-collision", async () => {
   const storage = fakeStorage()
   await storage.set('components:project-a', [{ id: 'cp_1', name: 'chip' }])
   const store = createComponentStore<Fixture>({
     storage,
     newId: () => 'id',
-    listOtherProjects: async (current) =>
-      [{ id: 'project-b', name: 'B' }].filter((p) => p.id !== current),
+    listOtherProjects: async (current) => [{ id: 'project-b', name: 'B' }].filter((p) => p.id !== current),
   })
   const result = await store.moveComponent('project-a', 'chip', { toName: 'chip', slugify: (v) => v })
   assert.deepEqual(result, { moved: true, name: 'chip', project: 'project-a' })

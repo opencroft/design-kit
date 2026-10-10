@@ -1,5 +1,6 @@
-import { icons, React } from '@ext/host'
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@ext/ui'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@opencroft/client/ui'
+import { Trash2 } from 'lucide-react'
+import type { MouseEvent, ReactElement, ReactNode } from 'react'
 
 // Follows the kit source (@opencroft/row-context-menu): the menu a list row
 // carries — right-click on a pointer, long press on touch, both from the
@@ -16,12 +17,10 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 //
 // With no entries and no `onDelete` the row is returned untouched, so a
 // read-only list pays nothing for the option.
-const { Trash2 } = icons
-
 export interface RowMenuEntry {
   label: string
   onSelect: () => void
-  icon?: React.ReactNode
+  icon?: ReactNode
   /** Draws the entry destructively. `onDelete` already does this for the
    *  canonical Delete; this is for a second destructive act a host owns. */
   destructive?: boolean
@@ -34,7 +33,7 @@ export interface RowContextMenuProps {
    *  trigger AS it, via `render`), so it keeps its own click, keyboard and drag
    *  behaviour — this adds a menu to a row rather than wrapping it in one. It
    *  must spread the props it is given and forward its ref; a DOM element does. */
-  children: React.ReactElement
+  children: ReactElement
   entries?: RowMenuEntry[]
   /** The canonical destructive Delete, always last. Its own prop rather than an
    *  entry so every list deletes with the same wording, icon and position. */
@@ -52,7 +51,7 @@ export function RowContextMenu({ children, entries, onDelete }: RowContextMenuPr
       {/* `min-w-32` is the scale utility for 8rem. A scale class is a literal
           and always renders; an arbitrary one renders only where the same
           string reaches a file the build scans. */}
-      <ContextMenuContent className='min-w-32' onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+      <ContextMenuContent className='min-w-32' onClick={(e: MouseEvent) => e.stopPropagation()}>
         {entries?.map((entry) => (
           <ContextMenuItem
             key={entry.key ?? entry.label}

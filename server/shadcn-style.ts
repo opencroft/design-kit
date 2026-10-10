@@ -88,7 +88,8 @@ export function shadcnStyleCss(style: string): string {
 // lucide, because it is what the shadcn default config uses; the item then
 // imports lucide-react like any other package (see ./upstream-item).
 
-const PLACEHOLDER_IMPORT = /^[ \t]*import\s*\{\s*IconPlaceholder\s*\}\s*from\s*["'][^"']*\/icon-placeholder["'];?[ \t]*$/m
+const PLACEHOLDER_IMPORT =
+  /^[ \t]*import\s*\{\s*IconPlaceholder\s*\}\s*from\s*["'][^"']*\/icon-placeholder["'];?[ \t]*$/m
 const LIBRARY_ATTRS = new Set(['lucide', 'tabler', 'hugeicons', 'phosphor', 'remixicon'])
 
 // Split a JSX tag's attribute text into whole attributes, respecting quoted
@@ -198,13 +199,13 @@ export function transformIconPlaceholders(source: string): string {
     }
     icons.add(icon)
     const kept = attrs.filter((a) => !LIBRARY_ATTRS.has(a.split('=')[0]))
-    out += source.slice(pos, at) + `<${icon}${kept.length ? ` ${kept.join(' ')}` : ''}${end.selfClosing ? ' />' : '>'}`
+    out += `${source.slice(pos, at)}<${icon}${kept.length ? ` ${kept.join(' ')}` : ''}${end.selfClosing ? ' />' : '>'}`
     pos = end.attrsEnd + (end.selfClosing ? 2 : 1)
     // A non-self-closing placeholder closes with its own name.
     if (!end.selfClosing) {
       const close = source.indexOf('</IconPlaceholder>', pos)
       if (close >= 0) {
-        out += source.slice(pos, close) + `</${icon}>`
+        out += `${source.slice(pos, close)}</${icon}>`
         pos = close + '</IconPlaceholder>'.length
       }
     }

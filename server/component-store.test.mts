@@ -7,19 +7,20 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { draftStateFor,
+import type { ComponentStorage, HistoryEntry, ShrinkRefusedError, StaleWriteError } from './component-store.ts'
+import {
   componentsKey,
   createComponentStore,
   draftKey,
-  historyKey,
+  draftStateFor,
   HISTORY_COMPONENT_BUDGET_BYTES,
   HISTORY_EXTENSION_CEILING_BYTES,
   HISTORY_INDEX_KEY,
   HISTORY_KEEP_MIN,
+  historyKey,
   SHRINK_REFUSED,
   STALE_WRITE,
 } from './component-store.ts'
-import type { ComponentStorage, HistoryEntry, ShrinkRefusedError, StaleWriteError } from './component-store.ts'
 
 interface TestComponent {
   id: string
@@ -72,12 +73,19 @@ function store(storage: ComponentStorage) {
   let n = 0
   return createComponentStore<TestComponent>({
     storage,
-    newId: () => `cp_backfilled_${(n += 1)}`,
+    newId: () => {
+      n += 1
+      return `cp_backfilled_${n}`
+    },
     now: () => 1000,
   })
 }
 
-const slugify = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+const slugify = (v: string) =>
+  v
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
 
 const file = (path: string, content: string) => ({ path, target: path, type: 'registry:component', content })
 
@@ -122,7 +130,12 @@ test('a failure while truncating the source leaves a visible duplicate, not a lo
 })
 
 test('a completed cross-project move leaves exactly one copy, in the destination', async () => {
-  const { storage, data } = fakeStorage(seedProjects([{ id: 'cp_1', name: 'widget' }, { id: 'cp_2', name: 'other' }]))
+  const { storage, data } = fakeStorage(
+    seedProjects([
+      { id: 'cp_1', name: 'widget' },
+      { id: 'cp_2', name: 'other' },
+    ]),
+  )
   const result = await store(storage).moveComponent(SOURCE, 'widget', { destProjectId: DEST, slugify })
 
   assert.deepEqual(result, { moved: true, name: 'widget', project: DEST })
@@ -140,7 +153,10 @@ test('a cross-project move can rename in the same operation', async () => {
 
 test('a same-project rename keeps the list the same size and writes once', async () => {
   const { storage, data, componentWrites } = fakeStorage(
-    seedProjects([{ id: 'cp_1', name: 'widget' }, { id: 'cp_2', name: 'other' }]),
+    seedProjects([
+      { id: 'cp_1', name: 'widget' },
+      { id: 'cp_2', name: 'other' },
+    ]),
   )
   await store(storage).moveComponent(SOURCE, 'widget', { toName: 'renamed', slugify })
 
@@ -161,16 +177,25 @@ test('a colliding move is refused before anything is written', async () => {
 
 test('a colliding same-project rename is refused before anything is written', async () => {
   const { storage, componentWrites } = fakeStorage(
-    seedProjects([{ id: 'cp_1', name: 'widget' }, { id: 'cp_2', name: 'taken' }]),
+    seedProjects([
+      { id: 'cp_1', name: 'widget' },
+      { id: 'cp_2', name: 'taken' },
+    ]),
   )
-  await assert.rejects(store(storage).moveComponent(SOURCE, 'widget', { toName: 'taken', slugify }), /already exists here/)
+  await assert.rejects(
+    store(storage).moveComponent(SOURCE, 'widget', { toName: 'taken', slugify }),
+    /already exists here/,
+  )
   assert.deepEqual(componentWrites, [])
 })
 
 // ── the shrink guard ─────────────────────────────────────────────────
 
 test('a write that silently drops a component is refused and changes nothing', async () => {
-  const seeded = [{ id: 'cp_1', name: 'widget' }, { id: 'cp_2', name: 'other' }]
+  const seeded = [
+    { id: 'cp_1', name: 'widget' },
+    { id: 'cp_2', name: 'other' },
+  ]
   const { storage, data } = fakeStorage(seedProjects(seeded))
 
   const err = (await store(storage)
@@ -188,17 +213,31 @@ test('a write that silently drops a component is refused and changes nothing', a
 // list: each checks it in the place that holds it.
 
 test('a refused write leaves nothing behind, because it wrote nothing', async () => {
-  const { storage, data } = fakeStorage(seedProjects([{ id: 'cp_1', name: 'widget' }, { id: 'cp_2', name: 'other' }]))
+  const { storage, data } = fakeStorage(
+    seedProjects([
+      { id: 'cp_1', name: 'widget' },
+      { id: 'cp_2', name: 'other' },
+    ]),
+  )
 
   await assert.rejects(store(storage).writeComponents(SOURCE, []))
 
   assert.deepEqual(names(data.get(componentsKey(SOURCE))), ['widget', 'other'], 'the list is still whole')
   assert.equal(data.get(draftKey(SOURCE)), undefined, 'and no partial draft was left over')
-  assert.deepEqual([...data.keys()].filter((k) => k.startsWith('components-snapshot')), [], 'nothing is copied aside')
+  assert.deepEqual(
+    [...data.keys()].filter((k) => k.startsWith('components-snapshot')),
+    [],
+    'nothing is copied aside',
+  )
 })
 
 test('an intended removal files the record it removed, so a delete is recoverable', async () => {
-  const { storage, data } = fakeStorage(seedProjects([{ id: 'cp_1', name: 'widget' }, { id: 'cp_2', name: 'other', updatedAt: 4, title: 'Other' }]))
+  const { storage, data } = fakeStorage(
+    seedProjects([
+      { id: 'cp_1', name: 'widget' },
+      { id: 'cp_2', name: 'other', updatedAt: 4, title: 'Other' },
+    ]),
+  )
   const s = store(storage)
 
   assert.deepEqual(await s.deleteComponent(SOURCE, 'other'), { deleted: true, name: 'other' })
@@ -214,7 +253,10 @@ test('deleting something that is not there removes nothing and files nothing', a
   const s = store(storage)
 
   assert.deepEqual(await s.deleteComponent(SOURCE, 'absent'), { deleted: false, name: 'absent' })
-  assert.deepEqual([...data.keys()].filter((k) => k.startsWith('component-history:')), [])
+  assert.deepEqual(
+    [...data.keys()].filter((k) => k.startsWith('component-history:')),
+    [],
+  )
 })
 
 // An authoring write does not land where installers read. An add or an edit is
@@ -262,7 +304,10 @@ test('a draft is invisible to the published read the registry is served from', a
   const { storage } = fakeStorage(seedProjects([{ id: 'cp_1', name: 'widget', updatedAt: 1 }]))
   const s = store(storage)
 
-  await s.writeComponents(SOURCE, [{ id: 'cp_1', name: 'widget', updatedAt: 9 }, { id: 'cp_2', name: 'unpublished', updatedAt: 9 }])
+  await s.writeComponents(SOURCE, [
+    { id: 'cp_1', name: 'widget', updatedAt: 9 },
+    { id: 'cp_2', name: 'unpublished', updatedAt: 9 },
+  ])
 
   assert.deepEqual(names(await s.readPublished(SOURCE)), ['widget'])
   assert.deepEqual(names(await s.readComponents(SOURCE)), ['widget', 'unpublished'])
@@ -277,7 +322,9 @@ test('publishing serves the draft, spends a version and clears the overlay', asy
 
   assert.equal(result.published, true)
   assert.equal(result.version, 4)
-  assert.deepEqual(await s.readPublished(SOURCE), [{ id: 'cp_1', name: 'widget', updatedAt: 9, version: 4, publishedAt: 1000 }])
+  assert.deepEqual(await s.readPublished(SOURCE), [
+    { id: 'cp_1', name: 'widget', updatedAt: 9, version: 4, publishedAt: 1000 },
+  ])
   assert.deepEqual(data.get(draftKey(SOURCE)), [], 'nothing is left unpublished')
 })
 
@@ -331,9 +378,17 @@ test('publishing with nothing unpublished changes nothing and spends no version'
 // a shrinking list has nothing to fire on. Asserted because getting this wrong
 // would block every publish in a project holding more than one component.
 test('the shrink guard does not misfire when a draft is promoted', async () => {
-  const { storage } = fakeStorage(seedProjects([{ id: 'cp_1', name: 'widget', updatedAt: 1 }, { id: 'cp_2', name: 'other', updatedAt: 1 }]))
+  const { storage } = fakeStorage(
+    seedProjects([
+      { id: 'cp_1', name: 'widget', updatedAt: 1 },
+      { id: 'cp_2', name: 'other', updatedAt: 1 },
+    ]),
+  )
   const s = store(storage)
-  await s.writeComponents(SOURCE, [{ id: 'cp_1', name: 'widget', updatedAt: 9 }, { id: 'cp_2', name: 'other', updatedAt: 1 }])
+  await s.writeComponents(SOURCE, [
+    { id: 'cp_1', name: 'widget', updatedAt: 9 },
+    { id: 'cp_2', name: 'other', updatedAt: 1 },
+  ])
 
   await s.publishComponent(SOURCE, 'widget')
 
@@ -352,9 +407,17 @@ test('an edit that puts a component back exactly as published leaves no draft be
 })
 
 test('deleting takes the published copy and the draft, and leaves the record recoverable', async () => {
-  const { storage, data } = fakeStorage(seedProjects([{ id: 'cp_1', name: 'widget', updatedAt: 1 }, { id: 'cp_2', name: 'other', updatedAt: 1 }]))
+  const { storage, data } = fakeStorage(
+    seedProjects([
+      { id: 'cp_1', name: 'widget', updatedAt: 1 },
+      { id: 'cp_2', name: 'other', updatedAt: 1 },
+    ]),
+  )
   const s = store(storage)
-  await s.writeComponents(SOURCE, [{ id: 'cp_1', name: 'widget', updatedAt: 9, files: [file('a.tsx', 'kept')] }, { id: 'cp_2', name: 'other', updatedAt: 1 }])
+  await s.writeComponents(SOURCE, [
+    { id: 'cp_1', name: 'widget', updatedAt: 9, files: [file('a.tsx', 'kept')] },
+    { id: 'cp_2', name: 'other', updatedAt: 1 },
+  ])
   await s.publishComponent(SOURCE, 'widget')
 
   await s.deleteComponent(SOURCE, 'widget')
@@ -365,7 +428,10 @@ test('deleting takes the published copy and the draft, and leaves the record rec
   // exactly why the entry a delete files is a whole record rather than a delta.
   const recovered = await s.reconstructVersion(SOURCE, 'cp_1', 2)
   assert.equal(recovered?.name, 'widget')
-  assert.deepEqual(recovered?.files?.map((f) => f.content), ['kept'])
+  assert.deepEqual(
+    recovered?.files?.map((f) => f.content),
+    ['kept'],
+  )
 })
 
 // ── history: reverse deltas under two byte budgets ───────────────────
@@ -388,7 +454,11 @@ test('a delta stores only the files that changed, not the ones that did not', as
   await publishFiles(s, [file('a.tsx', 'A2'), file('b.tsx', 'B — long enough to notice if it were copied')], 2)
 
   const [entry] = await s.readHistory(SOURCE, 'cp_1')
-  assert.deepEqual(entry.files.map((f) => f.path), ['a.tsx'], 'only the changed file is stored')
+  assert.deepEqual(
+    entry.files.map((f) => f.path),
+    ['a.tsx'],
+    'only the changed file is stored',
+  )
   assert.deepEqual(entry.order, ['a.tsx', 'b.tsx'], 'but the order records both, so the rebuild is exact')
 })
 
@@ -420,12 +490,22 @@ test('a revision beyond the pruned boundary reports that it is gone, and the old
   }
 
   const entries = await s.readHistory(SOURCE, 'cp_1')
-  const oldestKept = entries.at(-1)!.version
+  const oldest = entries.at(-1)
+  assert.ok(oldest, 'the history holds an entry')
+  const oldestKept = oldest.version
 
   assert.ok(entries.length >= HISTORY_KEEP_MIN, 'the floor is never crossed')
   assert.ok(oldestKept > 1, 'and something really was pruned, or this proves nothing')
-  assert.equal(await s.reconstructVersion(SOURCE, 'cp_1', oldestKept - 1), null, 'past the boundary: no answer, not a wrong one')
-  assert.deepEqual((await s.reconstructVersion(SOURCE, 'cp_1', oldestKept))?.files, [big(oldestKept)], 'at the boundary: exact')
+  assert.equal(
+    await s.reconstructVersion(SOURCE, 'cp_1', oldestKept - 1),
+    null,
+    'past the boundary: no answer, not a wrong one',
+  )
+  assert.deepEqual(
+    (await s.reconstructVersion(SOURCE, 'cp_1', oldestKept))?.files,
+    [big(oldestKept)],
+    'at the boundary: exact',
+  )
 })
 
 test('the floor survives a budget of zero, because reverting one step is what history is for', async () => {
@@ -468,7 +548,11 @@ test('the extension-wide ceiling prunes the globally oldest entry, not the newes
   const seeded: Record<string, unknown> = { ...seedProjects([]) }
   // Three components, each holding four entries of ~250 KB: 3 MB, over the
   // ceiling before anything of ours is written. The oldest `at` is in `old`.
-  for (const [name, base] of [['old', 100], ['mid', 200], ['new', 300]] as const) {
+  for (const [name, base] of [
+    ['old', 100],
+    ['mid', 200],
+    ['new', 300],
+  ] as const) {
     seeded[historyKey(SOURCE, name)] = [3, 2, 1, 0].map((i) => entry(i + 1, base + i, 250_000))
   }
   const { storage } = fakeStorage(seeded)
@@ -476,7 +560,10 @@ test('the extension-wide ceiling prunes the globally oldest entry, not the newes
 
   const result = await publishFiles(s, [file('a.tsx', 'A2')], 2).then(() => publishFiles(s, [file('a.tsx', 'A3')], 3))
 
-  assert.ok(result.history.extension <= HISTORY_EXTENSION_CEILING_BYTES, `still over the ceiling: ${result.history.extension}`)
+  assert.ok(
+    result.history.extension <= HISTORY_EXTENSION_CEILING_BYTES,
+    `still over the ceiling: ${result.history.extension}`,
+  )
   assert.ok((await s.readHistory(SOURCE, 'old')).length < 4, 'the oldest component gave entries up first')
   for (const name of ['old', 'mid', 'new']) {
     assert.ok((await s.readHistory(SOURCE, name)).length >= HISTORY_KEEP_MIN, `${name} was pruned below the floor`)
@@ -525,9 +612,14 @@ test('a write naming the revision it actually read is allowed through', async ()
   const { storage } = fakeStorage(seedProjects([{ id: 'cp_1', name: 'widget', updatedAt: 1 }]))
   const s = store(storage)
 
-  await s.writeComponents(SOURCE, [{ id: 'cp_1', name: 'widget', updatedAt: 2 }], { expect: { id: 'cp_1', updatedAt: 1 } })
+  await s.writeComponents(SOURCE, [{ id: 'cp_1', name: 'widget', updatedAt: 2 }], {
+    expect: { id: 'cp_1', updatedAt: 1 },
+  })
 
-  assert.deepEqual((await s.readComponents(SOURCE)).map((c) => c.updatedAt), [2])
+  assert.deepEqual(
+    (await s.readComponents(SOURCE)).map((c) => c.updatedAt),
+    [2],
+  )
 })
 
 test('a write naming a component that has since been deleted is refused', async () => {
@@ -577,7 +669,10 @@ test('the backfill write is not refused as a shrink', async () => {
 
   const list = await store(storage).readComponents(SOURCE)
 
-  assert.deepEqual(list.map((c) => c.id), ['cp_backfilled_1', 'cp_backfilled_2'])
+  assert.deepEqual(
+    list.map((c) => c.id),
+    ['cp_backfilled_1', 'cp_backfilled_2'],
+  )
   assert.deepEqual(names(data.get(componentsKey(SOURCE))), ['widget', 'other'])
 })
 
@@ -588,7 +683,7 @@ test('no overlay entry means no draft, whatever the record looks like', () => {
   assert.equal(draftStateFor({ id: 'c1', name: 'x', version: 4 }, false), undefined)
 })
 
-test('a draft over a published record is ahead of that record\'s version', () => {
+test("a draft over a published record is ahead of that record's version", () => {
   assert.equal(draftStateFor({ id: 'c1', name: 'x', version: 4 }, true), 4)
 })
 
@@ -651,10 +746,14 @@ async function publishThree(storage: ComponentStorage, clock: { now: number }) {
   await s.writeComponents(SOURCE, [{ id: 'cp_1', name: 'widget', updatedAt: 100, files: [file('a.tsx', 'a1')] }])
   await s.publishComponent(SOURCE, 'widget') // v1: created with a.tsx
   clock.now = 200
-  await s.writeComponents(SOURCE, [{ id: 'cp_1', name: 'widget', updatedAt: 200, files: [file('a.tsx', 'a1'), file('b.tsx', 'b1')] }])
+  await s.writeComponents(SOURCE, [
+    { id: 'cp_1', name: 'widget', updatedAt: 200, files: [file('a.tsx', 'a1'), file('b.tsx', 'b1')] },
+  ])
   await s.publishComponent(SOURCE, 'widget') // v2: adds b.tsx
   clock.now = 300
-  await s.writeComponents(SOURCE, [{ id: 'cp_1', name: 'widget', updatedAt: 300, files: [file('a.tsx', 'a2'), file('b.tsx', 'b1')] }])
+  await s.writeComponents(SOURCE, [
+    { id: 'cp_1', name: 'widget', updatedAt: 300, files: [file('a.tsx', 'a2'), file('b.tsx', 'b1')] },
+  ])
   await s.publishComponent(SOURCE, 'widget') // v3: edits a.tsx
   return s
 }
@@ -667,7 +766,10 @@ test('listRevisions over three publishes: versions newest-first with the right c
   assert.equal(result.draft, undefined, 'everything published; draft==published')
   assert.equal(result.truncated, false)
   assert.deepEqual(
-    result.revisions.map((r) => ({ version: r.version, filesChanged: r.filesChanged ? [...r.filesChanged].sort() : null })),
+    result.revisions.map((r) => ({
+      version: r.version,
+      filesChanged: r.filesChanged ? [...r.filesChanged].sort() : null,
+    })),
     [
       { version: 3, filesChanged: ['a.tsx'] },
       { version: 2, filesChanged: ['b.tsx'] },
@@ -721,7 +823,9 @@ test('a legacy record with no publishedAt is compared by updatedAt, honestly', a
 // inherited — a stale name is worse than no name.
 
 test('a publish records who declared it, and the next publish does not inherit them', async () => {
-  const { storage } = fakeStorage(seedProjects([{ id: 'cp_1', name: 'widget', updatedAt: 1, version: 1, publishedAt: 500 }]))
+  const { storage } = fakeStorage(
+    seedProjects([{ id: 'cp_1', name: 'widget', updatedAt: 1, version: 1, publishedAt: 500 }]),
+  )
   const s = store(storage)
   await s.writeComponents(SOURCE, [{ id: 'cp_1', name: 'widget', updatedAt: 9 }])
 
@@ -734,7 +838,11 @@ test('a publish records who declared it, and the next publish does not inherit t
   const second = await s.publishComponent(SOURCE, 'widget')
   assert.equal(second.published, true)
   head = (await s.readPublished(SOURCE))[0] as { publishedBy?: { name: string; kind: string } }
-  assert.equal(head.publishedBy, undefined, 'the previous publisher must not be attributed to a publish that declared nobody')
+  assert.equal(
+    head.publishedBy,
+    undefined,
+    'the previous publisher must not be attributed to a publish that declared nobody',
+  )
 })
 
 test('revision rows name their publisher where one was declared, system publishers included', async () => {

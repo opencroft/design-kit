@@ -18,7 +18,13 @@ test('undeclared npm imports are added by package name, declared ones kept with 
     `import * as React from "react"\nimport { cva } from "class-variance-authority"\nimport { XIcon } from "lucide-react"\nimport { Dialog as DialogPrimitive } from "radix-ui"\nimport { cn } from "cn"\nimport { Button } from "@/components/ui/button"\nimport "./styles.css"\n`,
     `import { Popover } from "@base-ui/react/popover"\nexport { Slot } from "radix-ui"\n`,
   ]
-  assert.deepEqual(upstreamDependencies(files, ['radix-ui@^1.4.0', 'cn']), ['radix-ui@^1.4.0', 'cn', 'class-variance-authority', 'lucide-react', '@base-ui/react'])
+  assert.deepEqual(upstreamDependencies(files, ['radix-ui@^1.4.0', 'cn']), [
+    'radix-ui@^1.4.0',
+    'cn',
+    'class-variance-authority',
+    'lucide-react',
+    '@base-ui/react',
+  ])
 })
 
 test('an item importing nothing from npm keeps exactly its declarations', () => {

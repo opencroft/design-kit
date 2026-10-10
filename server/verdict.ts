@@ -90,7 +90,10 @@ export function verdictOf(targets: readonly ValidateTarget[]): ComponentVerdict 
  * importing the same missing name is the ordinary case — is indistinguishable
  * here, and is counted as this component's rather than blamed on a neighbour.
  */
-export function diagnosticsFromOtherGroups(poolDiagnostics: readonly string[], ownEvaluation: ValidateTarget | undefined): string[] {
+export function diagnosticsFromOtherGroups(
+  poolDiagnostics: readonly string[],
+  ownEvaluation: ValidateTarget | undefined,
+): string[] {
   const own = new Set<string>(ownEvaluation?.unresolvedImports ?? [])
   if (ownEvaluation?.error) {
     own.add(ownEvaluation.error)
@@ -122,7 +125,8 @@ export function summarizeValidation(targets: readonly ValidateTarget[], at: numb
   return { ok: failed.length === 0, failed, at }
 }
 
-const isValidateTarget = (value: unknown): value is ValidateTarget => typeof (value as ValidateTarget | undefined)?.target === 'string'
+const isValidateTarget = (value: unknown): value is ValidateTarget =>
+  typeof (value as ValidateTarget | undefined)?.target === 'string'
 
 /**
  * A stored summary read back, which is not the same as a summary: the record
@@ -137,7 +141,9 @@ const isValidateTarget = (value: unknown): value is ValidateTarget => typeof (va
  * If a store is ever found holding the older shape, the two answers have to
  * become distinguishable before anything relies on this one.
  */
-export function readValidationSummary(stored: { ok: boolean; failed: unknown[]; at: number } | undefined): ValidationSummary | undefined {
+export function readValidationSummary(
+  stored: { ok: boolean; failed: unknown[]; at: number } | undefined,
+): ValidationSummary | undefined {
   if (!stored) {
     return undefined
   }
@@ -184,7 +190,10 @@ export function judge(targets: readonly ValidateTarget[], poolDiagnostics: reado
         `${unresolved.join(', ')} — undefined wherever used; write \`import type\` for any that are types`,
     )
   }
-  const foreign = diagnosticsFromOtherGroups(poolDiagnostics, targets.find((t) => t.target === SOURCE_TARGET))
+  const foreign = diagnosticsFromOtherGroups(
+    poolDiagnostics,
+    targets.find((t) => t.target === SOURCE_TARGET),
+  )
   if (foreign.length > 0) {
     parts.push(`${foreign.length} diagnostics from other components in the shared preview pool, see poolDiagnostics`)
   }

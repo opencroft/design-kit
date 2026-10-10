@@ -60,7 +60,16 @@ export interface DependencyGraphDeps {
 export type UnresolvedReason = 'unparsable-reference' | 'unknown-namespace' | 'missing-component' | 'unresolved-import'
 
 export type GraphNode =
-  | { id: string; kind: 'component'; projectId: string; namespace: string; name: string; title?: string; category?: string; root?: true }
+  | {
+      id: string
+      kind: 'component'
+      projectId: string
+      namespace: string
+      name: string
+      title?: string
+      category?: string
+      root?: true
+    }
   | { id: string; kind: 'shadcn'; name: string }
   | { id: string; kind: 'npm'; name: string }
   | { id: string; kind: 'unresolved'; reference: string; reason: UnresolvedReason }
@@ -136,13 +145,8 @@ export function reservedNamespaceReason(ns: string): string | null {
 // The item name a `@/…` path alias resolves to — its last path segment.
 // `@/components/ui/button` → button; `@/components/ui/layout/flex` → flex.
 export function aliasImportNames(content: string): string[] {
-  const out: string[] = []
   const re = /from\s*['"]@\/[^'"]*?([A-Za-z0-9-]+)['"]/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(content)) !== null) {
-    out.push(m[1])
-  }
-  return out
+  return Array.from(content.matchAll(re), (m) => m[1])
 }
 
 const BARE_NAME = /^[a-z0-9-]+$/
@@ -191,7 +195,15 @@ export function createDependencyGraphBuilder(deps: DependencyGraphDeps) {
     const ensureComponent = (pid: string, comp: GraphComponentSummary): string => {
       const id = componentId(pid, comp.name)
       if (!nodes.has(id)) {
-        nodes.set(id, { id, kind: 'component', projectId: pid, namespace: nsOf.get(pid) ?? '', name: comp.name, title: comp.title, category: comp.category })
+        nodes.set(id, {
+          id,
+          kind: 'component',
+          projectId: pid,
+          namespace: nsOf.get(pid) ?? '',
+          name: comp.name,
+          title: comp.title,
+          category: comp.category,
+        })
       }
       return id
     }
@@ -245,8 +257,13 @@ export function createDependencyGraphBuilder(deps: DependencyGraphDeps) {
     // Where an undeclared `@/…` import of `name` lands, seen from a component
     // of `importerProjectId`: own sibling, then the shadcn registry, then the
     // first match anywhere, then nowhere.
-    const resolveImport = async (importerProjectId: string, name: string): Promise<
-      { kind: 'component'; projectId: string; comp: GraphComponentSummary } | { kind: 'shadcn' } | { kind: 'unresolved' }
+    const resolveImport = async (
+      importerProjectId: string,
+      name: string,
+    ): Promise<
+      | { kind: 'component'; projectId: string; comp: GraphComponentSummary }
+      | { kind: 'shadcn' }
+      | { kind: 'unresolved' }
     > => {
       const sibling = (byProject.get(importerProjectId) ?? []).find((c) => c.name === name)
       if (sibling) {
@@ -265,7 +282,10 @@ export function createDependencyGraphBuilder(deps: DependencyGraphDeps) {
     // References of one component: every declared entry, every npm package,
     // every undeclared alias import — each becomes exactly one edge. Returns
     // the kit components to walk next.
-    const referencesOf = async (pid: string, comp: GraphComponentSummary): Promise<Array<{ projectId: string; comp: GraphComponentSummary }>> => {
+    const referencesOf = async (
+      pid: string,
+      comp: GraphComponentSummary,
+    ): Promise<Array<{ projectId: string; comp: GraphComponentSummary }>> => {
       const from = ensureComponent(pid, comp)
       const ns = nsOf.get(pid) ?? ''
       const next: Array<{ projectId: string; comp: GraphComponentSummary }> = []
@@ -277,12 +297,24 @@ export function createDependencyGraphBuilder(deps: DependencyGraphDeps) {
           coveredNames.add(parsed.name)
           const targetPid = projectByNs.get(parsed.ns)
           if (targetPid === undefined) {
-            addEdge({ from, to: ensureUnresolved(`@${parsed.ns}/${parsed.name}`, dep, 'unknown-namespace'), tag: 'declared', reference: dep, unresolved: 'unknown-namespace' })
+            addEdge({
+              from,
+              to: ensureUnresolved(`@${parsed.ns}/${parsed.name}`, dep, 'unknown-namespace'),
+              tag: 'declared',
+              reference: dep,
+              unresolved: 'unknown-namespace',
+            })
             continue
           }
           const target = (byProject.get(targetPid) ?? []).find((c) => c.name === parsed.name)
           if (!target) {
-            addEdge({ from, to: ensureUnresolved(`@${parsed.ns}/${parsed.name}`, dep, 'missing-component'), tag: 'declared', reference: dep, unresolved: 'missing-component' })
+            addEdge({
+              from,
+              to: ensureUnresolved(`@${parsed.ns}/${parsed.name}`, dep, 'missing-component'),
+              tag: 'declared',
+              reference: dep,
+              unresolved: 'missing-component',
+            })
             continue
           }
           addEdge({ from, to: ensureComponent(targetPid, target), tag: 'declared', reference: dep })
@@ -291,7 +323,13 @@ export function createDependencyGraphBuilder(deps: DependencyGraphDeps) {
           coveredNames.add(dep)
           addEdge({ from, to: ensureShadcn(dep), tag: 'shadcn', reference: dep })
         } else {
-          addEdge({ from, to: ensureUnresolved(dep, dep, 'unparsable-reference'), tag: 'declared', reference: dep, unresolved: 'unparsable-reference' })
+          addEdge({
+            from,
+            to: ensureUnresolved(dep, dep, 'unparsable-reference'),
+            tag: 'declared',
+            reference: dep,
+            unresolved: 'unparsable-reference',
+          })
         }
       }
 
@@ -317,7 +355,13 @@ export function createDependencyGraphBuilder(deps: DependencyGraphDeps) {
           } else if (hit.kind === 'shadcn') {
             addEdge({ from, to: ensureShadcn(name), tag: 'shadcn', reference: name })
           } else {
-            addEdge({ from, to: ensureUnresolved(`import:${name}`, name, 'unresolved-import'), tag: 'inferred', reference: name, unresolved: 'unresolved-import' })
+            addEdge({
+              from,
+              to: ensureUnresolved(`import:${name}`, name, 'unresolved-import'),
+              tag: 'inferred',
+              reference: name,
+              unresolved: 'unresolved-import',
+            })
           }
         }
       }
@@ -330,8 +374,8 @@ export function createDependencyGraphBuilder(deps: DependencyGraphDeps) {
     ;(nodes.get(rootId) as Extract<GraphNode, { kind: 'component' }>).root = true
     const walked = new Set<string>([rootId])
     const queue: Array<{ projectId: string; comp: GraphComponentSummary }> = [{ projectId, comp: rootComp }]
-    while (queue.length > 0) {
-      const { projectId: pid, comp } = queue.shift()!
+    for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+      const { projectId: pid, comp } = next
       for (const found of await referencesOf(pid, comp)) {
         const id = componentId(found.projectId, found.comp.name)
         if (!walked.has(id)) {

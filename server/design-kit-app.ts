@@ -1,5 +1,4 @@
-import host from '@ext/host'
-import type { AppActionHandler, AppInstanceContext, AppsExport } from '@opencroft/server'
+import { type AppActionHandler, type AppInstanceContext, type AppsExport, apps } from '@opencroft/server/apps'
 
 import { ensureRepo } from './component-repo'
 import { reservedNamespaceReason } from './dependency-graph'
@@ -35,11 +34,17 @@ export function createDesignKitApp(deps: DesignKitAppDeps): AppsExport {
     }
     const reserved = reservedNamespaceReason(ctx.slug)
     if (reserved) {
-      throw new Error(`Refusing the name "${ctx.name}": its namespace "@${ctx.slug}" is reserved. ${reserved} Pick a different name.`)
+      throw new Error(
+        `Refusing the name "${ctx.name}": its namespace "@${ctx.slug}" is reserved. ${reserved} Pick a different name.`,
+      )
     }
-    const clash = (await host.apps.listInstances(APP_SLUG)).find((i) => i.instanceId !== ctx.instanceId && i.slug === ctx.slug)
+    const clash = (await apps.listInstances(APP_SLUG)).find(
+      (i) => i.instanceId !== ctx.instanceId && i.slug === ctx.slug,
+    )
     if (clash) {
-      throw new Error(`The namespace "@${ctx.slug}" is already taken by the "${clash.name}" instance in the "${clash.spaceSlug}" space. Pick a different name.`)
+      throw new Error(
+        `The namespace "@${ctx.slug}" is already taken by the "${clash.name}" instance in the "${clash.spaceSlug}" space. Pick a different name.`,
+      )
     }
   }
 

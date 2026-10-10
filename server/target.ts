@@ -235,7 +235,9 @@ export function rewriteComponentImports(content: string, importer: ImportOrigin,
   // the alias, which is the only form left and is wrong for a consumer whose
   // packages are separate.
   const emit = (served: string): string =>
-    inSharedPackage(served) === inSharedPackage(importer.served) ? relativeSpecifier(importer.served, served) : `@/${dropExtension(served)}`
+    inSharedPackage(served) === inSharedPackage(importer.served)
+      ? relativeSpecifier(importer.served, served)
+      : `@/${dropExtension(served)}`
 
   // This pass runs FIRST, and the order is load-bearing because both passes can
   // emit a path: the alias pattern below cannot match one, while this pattern
@@ -364,7 +366,10 @@ export async function assertTargetsAvailable<T extends TargetComponent & { id: s
  * `normalizeFiles` is passed in rather than imported because materialising the
  * legacy single-`source` form is the library's own rule, not this module's.
  */
-export function withExplicitTargets<T extends TargetComponent>(component: T, normalizeFiles: (c: T) => TargetFile[]): T {
+export function withExplicitTargets<T extends TargetComponent>(
+  component: T,
+  normalizeFiles: (c: T) => TargetFile[],
+): T {
   if (component.targetsExplicit) {
     return component
   }

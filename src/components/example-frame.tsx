@@ -1,6 +1,6 @@
+import { cn } from 'cn'
 import type { ReactNode } from 'react'
 
-import { cn } from 'cn'
 import { EXAMPLE_FRAME_PRESETS, type ExampleFrameWidth, frameTracks, isBounded, presetOf } from './example-frame-width'
 
 // The surface a preview is shown ON: a hatched backdrop, cross-hair rules along
@@ -50,8 +50,12 @@ export function ExampleFrame({ children, width = 'fit', grid = true, gutter = 1,
       {grid && (
         <div className='pointer-events-none col-start-1 row-start-1 col-span-full row-span-full bg-[repeating-linear-gradient(315deg,color-mix(in_srgb,var(--pattern-fg),transparent_30%)_0,color-mix(in_srgb,var(--pattern-fg),transparent_30%)_1px,transparent_0,transparent_50%)] bg-size-[10px_10px]' />
       )}
-      {rules && <div className='pointer-events-none col-start-1 row-start-2 col-span-full border-y border-y-(--pattern-fg)' />}
-      {rules && <div className='pointer-events-none col-start-2 row-start-1 row-span-full border-x border-x-(--pattern-fg)' />}
+      {rules && (
+        <div className='pointer-events-none col-start-1 row-start-2 col-span-full border-y border-y-(--pattern-fg)' />
+      )}
+      {rules && (
+        <div className='pointer-events-none col-start-2 row-start-1 row-span-full border-x border-x-(--pattern-fg)' />
+      )}
 
       {/* The content, and nothing around it: a plain block that starts a new
           stacking context above the hatch and imposes no display mode of its
@@ -88,7 +92,10 @@ export function ExampleFrameWidthControl({ width, onChange, className }: Example
           onClick={() => onChange(preset.width)}
           aria-pressed={active?.id === preset.id}
           title={preset.width === 'full' ? `${preset.label} — full width` : `${preset.label} — ${preset.width}px`}
-          className={cn('rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200', active?.id === preset.id && 'bg-zinc-800 text-zinc-200')}
+          className={cn(
+            'rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200',
+            active?.id === preset.id && 'bg-zinc-800 text-zinc-200',
+          )}
         >
           {preset.label}
         </button>

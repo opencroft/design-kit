@@ -93,8 +93,6 @@ export function planMoves(name: string, files: MovableFile[], requested: Move[])
 
   return {
     files: tracked.map((t) => t.file),
-    moves: tracked
-      .map((t) => ({ from: t.origin, to: storagePath(name, t.file) }))
-      .filter((m) => m.from !== m.to),
+    moves: tracked.map((t) => ({ from: t.origin, to: storagePath(name, t.file) })).filter((m) => m.from !== m.to),
   }
 }

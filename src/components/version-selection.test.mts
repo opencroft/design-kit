@@ -11,25 +11,35 @@ import { test } from 'node:test'
 
 import { comparisonFor, pointsOf, type SelectionComparison, type TimelinePoint } from './version-selection.ts'
 
-const published = (...versions: number[]) => pointsOf(versions.map((version) => ({ version })), false)
-const withDraft = (...versions: number[]) => pointsOf(versions.map((version) => ({ version })), true)
+const published = (...versions: number[]) =>
+  pointsOf(
+    versions.map((version) => ({ version })),
+    false,
+  )
+const withDraft = (...versions: number[]) =>
+  pointsOf(
+    versions.map((version) => ({ version })),
+    true,
+  )
 
 /** The comparison, or a failure naming what came back instead. */
-function ok(points: TimelinePoint[], floor: number, from: number, to: number): Extract<SelectionComparison, { status: 'ok' }> {
+function ok(
+  points: TimelinePoint[],
+  floor: number,
+  from: number,
+  to: number,
+): Extract<SelectionComparison, { status: 'ok' }> {
   const c = comparisonFor(points, floor, from, to)
   assert.equal(c?.status, 'ok', `expected a comparison, got ${JSON.stringify(c)}`)
   return c as Extract<SelectionComparison, { status: 'ok' }>
 }
 
 test('the timeline runs oldest first, whatever order the versions arrive in', () => {
-  assert.deepEqual(
-    pointsOf([{ version: 3 }, { version: 1 }, { version: 2 }], false),
-    [
-      { at: 1, label: 'v1' },
-      { at: 2, label: 'v2' },
-      { at: 3, label: 'v3' },
-    ],
-  )
+  assert.deepEqual(pointsOf([{ version: 3 }, { version: 1 }, { version: 2 }], false), [
+    { at: 1, label: 'v1' },
+    { at: 2, label: 'v2' },
+    { at: 3, label: 'v3' },
+  ])
 })
 
 test('the draft is the newest point, after every published version', () => {
@@ -94,7 +104,11 @@ test('no selection ever compares its own two ends', () => {
   const points = published(1, 2, 3, 4)
   for (let from = 0; from < points.length; from += 1) {
     for (let to = from; to < points.length; to += 1) {
-      assert.notEqual(ok(points, 1, from, to).from, points[from].at, `selection ${from}..${to} compared its own lower end`)
+      assert.notEqual(
+        ok(points, 1, from, to).from,
+        points[from].at,
+        `selection ${from}..${to} compared its own lower end`,
+      )
     }
   }
 })
@@ -133,7 +147,11 @@ test('a selection reaching the earliest version held is refused when the project
   // Answering "nothing → v6" here would report every file as added at v6, and
   // read as the complete history of a component that has five versions below
   // the floor this project happens to hold.
-  assert.deepEqual(comparisonFor(published(6, 7, 8), 6, 0, 1), { status: 'predatesHistory', floor: 6, selectionLabel: 'v6–v7' })
+  assert.deepEqual(comparisonFor(published(6, 7, 8), 6, 0, 1), {
+    status: 'predatesHistory',
+    floor: 6,
+    selectionLabel: 'v6–v7',
+  })
 })
 
 test('above that floor the same project answers normally', () => {

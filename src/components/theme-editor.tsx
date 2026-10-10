@@ -1,7 +1,17 @@
-import { icons, React } from '@ext/host'
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, Label } from '@ext/ui'
-
-import { CodeBlockEditor } from '@opencroft/client'
+import { CodeBlockEditor } from '@opencroft/client/code'
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  Label,
+} from '@opencroft/client/ui'
+import { Palette } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 // The per-project preview theme dialog — pick one of the shadcn default themes,
 // or derive a custom one by editing its token CSS (`:root { … } .dark { … }`,
@@ -35,10 +45,10 @@ export interface ThemeEditorProps {
 }
 
 export function ThemeEditor({ theme, presets, saving = false, onOpenChange, onSave }: ThemeEditorProps) {
-  const [open, setOpenState] = React.useState(false)
-  const [preset, setPreset] = React.useState('neutral')
-  const [customize, setCustomize] = React.useState(false)
-  const [css, setCss] = React.useState('')
+  const [open, setOpenState] = useState(false)
+  const [preset, setPreset] = useState('neutral')
+  const [customize, setCustomize] = useState(false)
+  const [css, setCss] = useState('')
 
   const setOpen = (next: boolean) => {
     setOpenState(next)
@@ -46,7 +56,7 @@ export function ThemeEditor({ theme, presets, saving = false, onOpenChange, onSa
   }
 
   // (Re-)seed the dialog from the project's saved theme each time it opens.
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       return
     }
@@ -81,7 +91,6 @@ export function ThemeEditor({ theme, presets, saving = false, onOpenChange, onSa
     }
   }
 
-  const Palette = icons.Palette
   const label = theme?.css ? 'Custom' : (theme?.preset ?? 'neutral')
 
   return (
@@ -94,13 +103,19 @@ export function ThemeEditor({ theme, presets, saving = false, onOpenChange, onSa
       <DialogContent className='max-w-2xl'>
         <DialogHeader>
           <DialogTitle>Preview theme</DialogTitle>
-          <DialogDescription>The theme previews render with, isolated from the app. Pick a shadcn default or customize its token CSS.</DialogDescription>
+          <DialogDescription>
+            The theme previews render with, isolated from the app. Pick a shadcn default or customize its token CSS.
+          </DialogDescription>
         </DialogHeader>
 
         <div className='space-y-3'>
           <div className='flex items-center gap-3'>
             <Label className='w-16 shrink-0 text-xs'>Preset</Label>
-            <select value={preset} onChange={(e) => selectPreset(e.target.value)} className='h-9 flex-1 rounded-md border bg-background px-2 text-sm'>
+            <select
+              value={preset}
+              onChange={(e) => selectPreset(e.target.value)}
+              className='h-9 flex-1 rounded-md border bg-background px-2 text-sm'
+            >
               {(presets.length > 0 ? presets : [{ id: preset, label: preset, css: '' }]).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}

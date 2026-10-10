@@ -101,7 +101,9 @@ export type SelectionComparison =
  * left to right in time, a list of what happened lately reads from the top.
  */
 export function pointsOf(versions: Array<{ version: number }>, draftAhead: boolean): TimelinePoint[] {
-  const published: TimelinePoint[] = [...versions].sort((a, b) => a.version - b.version).map((v) => ({ at: v.version, label: `v${v.version}` }))
+  const published: TimelinePoint[] = [...versions]
+    .sort((a, b) => a.version - b.version)
+    .map((v) => ({ at: v.version, label: `v${v.version}` }))
   return draftAhead ? [...published, { at: 'draft', label: DRAFT_LABEL }] : published
 }
 
@@ -112,7 +114,12 @@ export function pointsOf(versions: Array<{ version: number }>, draftAhead: boole
  * holds, and 0 when it holds none. Null when the indices address no point,
  * which is a caller with nothing to show rather than a failure to report.
  */
-export function comparisonFor(points: TimelinePoint[], floor: number, from: number, to: number): SelectionComparison | null {
+export function comparisonFor(
+  points: TimelinePoint[],
+  floor: number,
+  from: number,
+  to: number,
+): SelectionComparison | null {
   const first = points[from]
   const last = points[to]
   if (!first || !last) {

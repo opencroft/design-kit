@@ -1,14 +1,22 @@
-import { React } from '@ext/host'
+import { cn } from 'cn'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { PreviewScope, RenderPayload } from '../../preview-runtime/protocol'
-import type { PropRow } from '../registry'
-import { cn } from 'cn'
 import { LiveExample } from '../components/live-example'
 import { Markdown } from '../components/markdown'
 import { PreviewBlock } from '../components/preview-block'
 import { PreviewFrame } from '../components/preview-frame'
 import { PropsTable } from '../components/props-table'
-import { coerceValue, type ControlSpec, defaultProps, docsRelative, type DocSegment, parseDoc, resolveSrc } from './doc-parser'
+import type { PropRow } from '../registry'
+import {
+  type ControlSpec,
+  coerceValue,
+  type DocSegment,
+  defaultProps,
+  docsRelative,
+  parseDoc,
+  resolveSrc,
+} from './doc-parser'
 
 // ── The doc renderer ─────────────────────────────────────────────────
 // A single, self-contained module: everything needed to turn a
@@ -23,7 +31,15 @@ import { coerceValue, type ControlSpec, defaultProps, docsRelative, type DocSegm
 function controlsToRows(controls: ControlSpec[]): PropRow[] {
   return controls.map((c) => ({
     name: c.name,
-    type: c.kind === 'enum' ? c.options.filter(Boolean).map((o) => `'${o}'`).join(' | ') || 'string' : c.kind === 'boolean' ? 'boolean' : 'string',
+    type:
+      c.kind === 'enum'
+        ? c.options
+            .filter(Boolean)
+            .map((o) => `'${o}'`)
+            .join(' | ') || 'string'
+        : c.kind === 'boolean'
+          ? 'boolean'
+          : 'string',
     default: c.kind === 'boolean' ? String(c.default) : c.default || undefined,
     description: c.description ?? '',
     control: c,
@@ -39,7 +55,11 @@ function initValues(controls: ControlSpec[]): Record<string, string | boolean> {
 }
 
 function ErrorText({ msg }: { msg: string }) {
-  return <div className='rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-center font-mono text-xs text-destructive'>{msg}</div>
+  return (
+    <div className='rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-center font-mono text-xs text-destructive'>
+      {msg}
+    </div>
+  )
 }
 
 // ── Interactive preview (controls-driven) ────────────────────────────
@@ -48,17 +68,31 @@ function ErrorText({ msg }: { msg: string }) {
 // frame), driven by the interactive props table. The user edits only the
 // example code; the controls (kinds/options/defaults) come from the
 // `<Preview controls={…}>` attribute.
-function DocPreview({ code, controls, scope, projectId, component, target }: { code: string; controls: ControlSpec[]; scope: PreviewScope; projectId: string; component: string; target: string }) {
-  const [current, setCurrent] = React.useState(code)
-  const [values, setValues] = React.useState<Record<string, string | boolean>>(() => initValues(controls))
-  React.useEffect(() => {
+function DocPreview({
+  code,
+  controls,
+  scope,
+  projectId,
+  component,
+  target,
+}: {
+  code: string
+  controls: ControlSpec[]
+  scope: PreviewScope
+  projectId: string
+  component: string
+  target: string
+}) {
+  const [current, setCurrent] = useState(code)
+  const [values, setValues] = useState<Record<string, string | boolean>>(() => initValues(controls))
+  useEffect(() => {
     setCurrent(code)
   }, [code])
-  React.useEffect(() => {
+  useEffect(() => {
     setValues(initValues(controls))
   }, [controls])
 
-  const props = React.useMemo(() => {
+  const props = useMemo(() => {
     const out: Record<string, unknown> = {}
     for (const c of controls) {
       const v = coerceValue(c.kind, values[c.name])
@@ -88,7 +122,9 @@ function DocPreview({ code, controls, scope, projectId, component, target }: { c
         previewProps={props}
         renderKey={`${current}::${JSON.stringify(values)}`}
       />
-      {rows.length > 0 && <PropsTable rows={rows} values={values} onChange={(name, v) => setValues((p) => ({ ...p, [name]: v }))} />}
+      {rows.length > 0 && (
+        <PropsTable rows={rows} values={values} onChange={(name, v) => setValues((p) => ({ ...p, [name]: v }))} />
+      )}
     </div>
   )
 }
@@ -99,9 +135,25 @@ function DocPreview({ code, controls, scope, projectId, component, target }: { c
 // (so any children/composition in the example carry over), with the other props
 // pinned to their control defaults. The grid itself renders inside the isolated
 // frame — the cells are the design, not host chrome.
-function DocSheet({ prop, values, title, previewCode, controls, scope, projectId }: { prop: string; values: unknown[]; title?: string; previewCode: string | null; controls: ControlSpec[]; scope: PreviewScope; projectId: string }) {
+function DocSheet({
+  prop,
+  values,
+  title,
+  previewCode,
+  controls,
+  scope,
+  projectId,
+}: {
+  prop: string
+  values: unknown[]
+  title?: string
+  previewCode: string | null
+  controls: ControlSpec[]
+  scope: PreviewScope
+  projectId: string
+}) {
   const kind = controls.find((c) => c.name === prop)?.kind
-  const payload = React.useMemo<RenderPayload | null>(() => {
+  const payload = useMemo<RenderPayload | null>(() => {
     if (!previewCode) {
       return null
     }
@@ -137,8 +189,20 @@ function MissingFile({ src }: { src: string }) {
 
 // ── The walker ───────────────────────────────────────────────────────
 
-export function DocView({ mdx, files, scope, projectId, component }: { mdx: string; files: Record<string, string>; scope: PreviewScope; projectId: string; component: string }) {
-  const segments = React.useMemo(() => {
+export function DocView({
+  mdx,
+  files,
+  scope,
+  projectId,
+  component,
+}: {
+  mdx: string
+  files: Record<string, string>
+  scope: PreviewScope
+  projectId: string
+  component: string
+}) {
+  const segments = useMemo(() => {
     try {
       return parseDoc(mdx)
     } catch {
@@ -153,22 +217,65 @@ export function DocView({ mdx, files, scope, projectId, component }: { mdx: stri
 
   return (
     <div className={cn('space-y-4')}>
+      {/* Keyed by position. A segment is a stretch of one parsed document and
+          has no identity of its own: two of them can hold the same text or
+          name the same file, and a content key would collide there. */}
       {segments.map((seg, i) => {
         if (seg.kind === 'md') {
+          // biome-ignore lint/suspicious/noArrayIndexKey: a segment's position is its identity
           return <Markdown key={i} source={seg.text} />
         }
         if (seg.kind === 'preview') {
           const code = resolveSrc(files, seg.src)
           // Its OWN src, not the doc's first preview: a document may hold more
           // than one <Preview>, and Open has to name the block it sits on.
-          return code == null ? <MissingFile key={i} src={seg.src} /> : <DocPreview key={i} code={code} controls={seg.controls} scope={scope} projectId={projectId} component={component} target={`preview:${docsRelative(seg.src)}`} />
+          return code == null ? (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a segment's position is its identity
+            <MissingFile key={i} src={seg.src} />
+          ) : (
+            <DocPreview
+              // biome-ignore lint/suspicious/noArrayIndexKey: a segment's position is its identity
+              key={i}
+              code={code}
+              controls={seg.controls}
+              scope={scope}
+              projectId={projectId}
+              component={component}
+              target={`preview:${docsRelative(seg.src)}`}
+            />
+          )
         }
         if (seg.kind === 'sheet') {
-          return <DocSheet key={i} prop={seg.prop} values={seg.values} title={seg.title} previewCode={previewCode} controls={controls} scope={scope} projectId={projectId} />
+          return (
+            <DocSheet
+              // biome-ignore lint/suspicious/noArrayIndexKey: a segment's position is its identity
+              key={i}
+              prop={seg.prop}
+              values={seg.values}
+              title={seg.title}
+              previewCode={previewCode}
+              controls={controls}
+              scope={scope}
+              projectId={projectId}
+            />
+          )
         }
         if (seg.kind === 'example') {
           const code = resolveSrc(files, seg.src)
-          return code == null ? <MissingFile key={i} src={seg.src} /> : <LiveExample key={i} code={code} scope={scope} projectId={projectId} component={component} target={`example:${docsRelative(seg.src)}`} />
+          return code == null ? (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a segment's position is its identity
+            <MissingFile key={i} src={seg.src} />
+          ) : (
+            <LiveExample
+              // biome-ignore lint/suspicious/noArrayIndexKey: a segment's position is its identity
+              key={i}
+              code={code}
+              scope={scope}
+              projectId={projectId}
+              component={component}
+              target={`example:${docsRelative(seg.src)}`}
+            />
+          )
         }
         return null
       })}

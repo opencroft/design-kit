@@ -1,8 +1,10 @@
-import { icons, React } from '@ext/host'
+import { useAppHref } from '@opencroft/client/app'
+import { CodeBlockEditor } from '@opencroft/client/code'
+import { cn } from 'cn'
+import { Check, Code2, Copy, ExternalLink, Grid3x3, Pencil, RotateCcw } from 'lucide-react'
+import { type PointerEvent as ReactPointerEvent, useMemo, useRef, useState } from 'react'
 
 import type { PreviewMode, PreviewScope, RenderPayload } from '../../preview-runtime/protocol'
-import { cn } from 'cn'
-import { CodeBlockEditor, useAppHref } from '@opencroft/client'
 import { previewAppPath } from './component-routes'
 import { ExampleFrame, ExampleFrameWidthControl } from './example-frame'
 import type { ExampleFrameWidth } from './example-frame-width'
@@ -39,18 +41,29 @@ export interface PreviewBlockProps {
   renderKey?: string
 }
 
-export function PreviewBlock({ code, onCodeChange, onReset, projectId, scope, component, target, mode, previewProps, renderKey }: PreviewBlockProps) {
-  const [copied, setCopied] = React.useState(false)
-  const [grid, setGrid] = React.useState(true)
-  const [showCode, setShowCode] = React.useState(true)
+export function PreviewBlock({
+  code,
+  onCodeChange,
+  onReset,
+  projectId,
+  scope,
+  component,
+  target,
+  mode,
+  previewProps,
+  renderKey,
+}: PreviewBlockProps) {
+  const [copied, setCopied] = useState(false)
+  const [grid, setGrid] = useState(true)
+  const [showCode, setShowCode] = useState(true)
   // What the preview is rendered at: a preset, or a px width from the handle.
-  const [width, setWidth] = React.useState<ExampleFrameWidth>('full')
-  const frameRef = React.useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState<ExampleFrameWidth>('full')
+  const frameRef = useRef<HTMLDivElement>(null)
   // True while the resize handle is held — see the shield rendered below.
-  const [dragging, setDragging] = React.useState(false)
+  const [dragging, setDragging] = useState(false)
   const appHref = useAppHref()
 
-  const payload = React.useMemo<RenderPayload>(
+  const payload = useMemo<RenderPayload>(
     () => ({ mode, ...scope, code, props: previewProps, renderKey }),
     [mode, scope, code, previewProps, renderKey],
   )
@@ -80,7 +93,7 @@ export function PreviewBlock({ code, onCodeChange, onReset, projectId, scope, co
   // it, and a full-viewport shield sits over every frame on the page (this
   // preview's and its neighbours') for as long as the drag lasts, which works
   // everywhere.
-  const startResize = (e: React.PointerEvent<HTMLDivElement>) => {
+  const startResize = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.preventDefault()
     const container = frameRef.current
     if (!container) {
@@ -109,14 +122,6 @@ export function PreviewBlock({ code, onCodeChange, onReset, projectId, scope, co
     window.addEventListener('pointercancel', up)
   }
 
-  const Pencil = icons.Pencil
-  const Check = icons.Check
-  const Copy = icons.Copy
-  const RotateCcw = icons.RotateCcw
-  const Grid3x3 = icons.Grid3x3
-  const ExternalLink = icons.ExternalLink
-  const Code2 = icons.Code2
-
   return (
     <div>
       <div ref={frameRef} className='relative flex min-h-60 overflow-hidden rounded-t-lg border bg-background'>
@@ -133,17 +138,29 @@ export function PreviewBlock({ code, onCodeChange, onReset, projectId, scope, co
           onPointerDown={startResize}
           title='Drag to resize'
           style={typeof width === 'number' ? { left: `calc(50% + ${width / 2}px)` } : undefined}
-          className={cn('group absolute inset-y-0 z-20 flex w-2.5 cursor-ew-resize items-center justify-center', typeof width !== 'number' && 'right-0')}
+          className={cn(
+            'group absolute inset-y-0 z-20 flex w-2.5 cursor-ew-resize items-center justify-center',
+            typeof width !== 'number' && 'right-0',
+          )}
         >
           <div className='h-10 w-1 rounded-full bg-border transition-colors group-hover:bg-primary/70' />
         </div>
 
         {dragging && <div aria-hidden className='fixed inset-0 z-50 cursor-ew-resize' />}
 
-        {typeof width === 'number' && <div className='pointer-events-none absolute left-2 top-1 z-20 rounded bg-zinc-900/70 px-1.5 py-0.5 text-[10px] font-medium text-zinc-200'>{width}px</div>}
+        {typeof width === 'number' && (
+          <div className='pointer-events-none absolute left-2 top-1 z-20 rounded bg-zinc-900/70 px-1.5 py-0.5 text-[10px] font-medium text-zinc-200'>
+            {width}px
+          </div>
+        )}
       </div>
 
-      <div className={cn('flex items-center justify-between gap-2 border border-t-0 bg-zinc-900 px-4 py-2 text-xs font-medium text-zinc-400', !showCode && 'rounded-b-lg')}>
+      <div
+        className={cn(
+          'flex items-center justify-between gap-2 border border-t-0 bg-zinc-900 px-4 py-2 text-xs font-medium text-zinc-400',
+          !showCode && 'rounded-b-lg',
+        )}
+      >
         <span className='flex items-center gap-1.5'>
           {showCode && (
             <>
@@ -156,20 +173,46 @@ export function PreviewBlock({ code, onCodeChange, onReset, projectId, scope, co
           <ExampleFrameWidthControl width={width} onChange={setWidth} />
           <span className='mx-0.5 h-3 w-px bg-zinc-700' />
           {component && (
-            <a href={appHref(previewAppPath(component, target))} target='_blank' rel='noreferrer' title='Open this preview in a new tab' className='flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200'>
+            <a
+              href={appHref(previewAppPath(component, target))}
+              target='_blank'
+              rel='noreferrer'
+              title='Open this preview in a new tab'
+              className='flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200'
+            >
               <ExternalLink className='h-3 w-3' />
               Open
             </a>
           )}
-          <button type='button' onClick={() => setGrid((g) => !g)} title='Toggle grid' className={cn('flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200', grid && 'bg-zinc-800 text-zinc-200')}>
+          <button
+            type='button'
+            onClick={() => setGrid((g) => !g)}
+            title='Toggle grid'
+            className={cn(
+              'flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200',
+              grid && 'bg-zinc-800 text-zinc-200',
+            )}
+          >
             <Grid3x3 className='h-3 w-3' />
             Grid
           </button>
-          <button type='button' onClick={() => setShowCode((s) => !s)} title={showCode ? 'Hide code' : 'Show code'} className={cn('flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200', showCode && 'bg-zinc-800 text-zinc-200')}>
+          <button
+            type='button'
+            onClick={() => setShowCode((s) => !s)}
+            title={showCode ? 'Hide code' : 'Show code'}
+            className={cn(
+              'flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200',
+              showCode && 'bg-zinc-800 text-zinc-200',
+            )}
+          >
             <Code2 className='h-3 w-3' />
             Code
           </button>
-          <button type='button' onClick={copy} className='flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200'>
+          <button
+            type='button'
+            onClick={copy}
+            className='flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200'
+          >
             {copied ? <Check className='h-3 w-3' /> : <Copy className='h-3 w-3' />}
             {copied ? 'Copied' : 'Copy'}
           </button>

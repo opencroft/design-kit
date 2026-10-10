@@ -1,7 +1,6 @@
-import { icons, React } from '@ext/host'
-import { Button } from '@ext/ui'
-
+import { Button } from '@opencroft/client/ui'
 import { cn } from 'cn'
+import { AlertTriangle, X } from 'lucide-react'
 
 // A failed check reported at the moment it matters. Every entry carries the
 // file it came from and opens it — "what failed" is useless without "where" —
@@ -13,8 +12,6 @@ import { cn } from 'cn'
 // what failed and ships anyway has made a choice. A target that reads something
 // only a browser has is listed in a quieter tone and said in words to be not a
 // failure.
-const { AlertTriangle, X } = icons
-
 export interface CheckResult {
   /** The target, worded the way the validator words it. */
   target: string
@@ -56,7 +53,12 @@ export interface SourceEditorValidationProps {
   onDismiss?: () => void
 }
 
-export function SourceEditorValidation({ results, moment = 'draft', onOpenFile, onDismiss }: SourceEditorValidationProps) {
+export function SourceEditorValidation({
+  results,
+  moment = 'draft',
+  onOpenFile,
+  onDismiss,
+}: SourceEditorValidationProps) {
   const failures = results.filter((r) => r.outcome === 'error')
   const hasFailures = failures.length > 0
   const ordered = [...failures, ...results.filter((r) => r.outcome !== 'error')]
@@ -65,10 +67,16 @@ export function SourceEditorValidation({ results, moment = 'draft', onOpenFile, 
   return (
     <div
       role='status'
-      className={cn('w-full rounded-md border px-3 py-2', hasFailures ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-muted/30')}
+      className={cn(
+        'w-full rounded-md border px-3 py-2',
+        hasFailures ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-muted/30',
+      )}
     >
       <div className='flex items-start gap-2'>
-        <AlertTriangle aria-hidden='true' className={cn('mt-0.5 size-4 shrink-0', hasFailures ? 'text-destructive' : 'text-muted-foreground')} />
+        <AlertTriangle
+          aria-hidden='true'
+          className={cn('mt-0.5 size-4 shrink-0', hasFailures ? 'text-destructive' : 'text-muted-foreground')}
+        />
         <div className='min-w-0 flex-1'>
           <p className={cn('text-sm font-medium', hasFailures ? 'text-destructive' : 'text-foreground')}>
             {hasFailures ? consequence.title(failures.length, failures.length === 1 ? '' : 's') : 'Nothing failed'}
@@ -78,7 +86,14 @@ export function SourceEditorValidation({ results, moment = 'draft', onOpenFile, 
           </p>
         </div>
         {onDismiss ? (
-          <Button type='button' variant='ghost' size='icon' className='size-6 shrink-0' aria-label='Dismiss' onClick={onDismiss}>
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            className='size-6 shrink-0'
+            aria-label='Dismiss'
+            onClick={onDismiss}
+          >
             <X className='size-3.5' />
           </Button>
         ) : null}
@@ -89,7 +104,14 @@ export function SourceEditorValidation({ results, moment = 'draft', onOpenFile, 
           const failed = result.outcome === 'error'
           const body = (
             <>
-              <span className={cn('block font-mono text-xs break-all', failed ? 'text-destructive' : 'text-muted-foreground')}>{result.target}</span>
+              <span
+                className={cn(
+                  'block font-mono text-xs break-all',
+                  failed ? 'text-destructive' : 'text-muted-foreground',
+                )}
+              >
+                {result.target}
+              </span>
               <span className='block pt-0.5 text-xs break-words text-foreground'>{result.message}</span>
               {failed ? null : (
                 <span className='block pt-0.5 text-xs text-muted-foreground'>
@@ -97,7 +119,10 @@ export function SourceEditorValidation({ results, moment = 'draft', onOpenFile, 
                 </span>
               )}
               {result.file ? (
-                <span className='block truncate pt-1 text-xs text-muted-foreground underline underline-offset-2' title={result.file}>
+                <span
+                  className='block truncate pt-1 text-xs text-muted-foreground underline underline-offset-2'
+                  title={result.file}
+                >
                   {result.file}
                 </span>
               ) : null}
@@ -110,7 +135,10 @@ export function SourceEditorValidation({ results, moment = 'draft', onOpenFile, 
                 <button
                   type='button'
                   onClick={() => onOpenFile(result.file as string)}
-                  className={cn('block w-full rounded-md border px-2 py-1.5 text-left transition-colors hover:bg-muted', tone)}
+                  className={cn(
+                    'block w-full rounded-md border px-2 py-1.5 text-left transition-colors hover:bg-muted',
+                    tone,
+                  )}
                 >
                   {body}
                 </button>

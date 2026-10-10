@@ -49,10 +49,10 @@ test('every path that changes the draft re-reads the record afterwards', () => {
   // the failure path alone and would accept a handler that never re-reads when
   // the write succeeds, which is the exact edit this exists to catch.
   for (const start of [
-    'const save = React.useCallback',
-    'const mutateFiles = React.useCallback',
-    'const doDiscard = React.useCallback',
-    'const doPublish = React.useCallback',
+    'const save = useCallback',
+    'const mutateFiles = useCallback',
+    'const doDiscard = useCallback',
+    'const doPublish = useCallback',
   ]) {
     assert.match(handler(source, start), /await load\(/, `${start} does not re-read on the path that succeeded`)
   }

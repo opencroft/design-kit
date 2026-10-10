@@ -37,7 +37,9 @@ const TYPE_ONLY = "ComponentProps (from 'react')"
 // evaluate, and nothing in the project renders it.
 const noDocPage: ValidateTarget[] = [
   target('source', 'ok', { unresolvedImports: [MISSING] }),
-  target('render', 'unverifiable', { error: 'no docs/doc.mdx — nothing here renders this component, so only its evaluation was checked' }),
+  target('render', 'unverifiable', {
+    error: 'no docs/doc.mdx — nothing here renders this component, so only its evaluation was checked',
+  }),
 ]
 
 // A documented component that renders, carrying the type-only import every
@@ -81,7 +83,10 @@ test('a rendering component stays ok, with its unresolved type import named rath
 })
 
 test('an error outranks a missing render — a broken component is broken, not unchecked', () => {
-  const broken = [target('source', 'error', { error: 'Unexpected token' }), target('render', 'unverifiable', { error: 'no docs/doc.mdx' })]
+  const broken = [
+    target('source', 'error', { error: 'Unexpected token' }),
+    target('render', 'unverifiable', { error: 'no docs/doc.mdx' }),
+  ]
   assert.equal(verdictOf(broken), 'error')
   assert.match(judge(broken, []).summary, /1 failed/)
 })
@@ -130,7 +135,7 @@ test('a pool entry this component also produced is not blamed on another compone
   assert.doesNotMatch(judge(documented, pool).summary, /other components/)
 })
 
-test('a pool entry this component could not have produced is counted as another component\'s', () => {
+test("a pool entry this component could not have produced is counted as another component's", () => {
   const pool = [TYPE_ONLY, "Chart (from '@/components/ui/chart')"]
   const own = documented.find((t) => t.target === 'source')
   assert.deepEqual(diagnosticsFromOtherGroups(pool, own), ["Chart (from '@/components/ui/chart')"])

@@ -6,18 +6,11 @@
 // `vnone` into the exact case the empty state exists to serve; a single site is
 // the protection.
 //
-// What that is NOT is a compile-time guarantee, for two reasons. Nothing
-// type-checks this repository — no tsconfig, no typecheck script — so a
-// type-level pin is a claim nothing evaluates; and a function total over three
-// members is not exhaustive over four, so a `v${at}` fallthrough would accept a
-// fourth and return `vhead`, the same defect one member later inside the
-// function written to prevent it.
-//
-// So the ordering below is the protection, and it needs no compiler: the `v`
-// prefix belongs to a NUMBER rather than to "not draft and not none". The
-// `never` line is written for the day this repository gains a typecheck and is
-// erased at build until then. The `throw` beside it is not erased, and it is
-// what actually holds.
+// The ordering below is the first protection, and it needs no compiler: the
+// `v` prefix belongs to a NUMBER rather than to "not draft and not none", so a
+// fourth member cannot fall into `v${at}` and come back as `vhead`. The `never`
+// line makes a fourth member a type error under `npm run typecheck`; it is
+// erased at build, so the `throw` beside it is what holds at run time.
 
 export type VersionEndpoint = number | 'draft' | 'none'
 

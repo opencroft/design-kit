@@ -25,7 +25,8 @@
  * Deliberately not global: a `g` regex used through `test`/`exec` is exactly
  * the defect described above.
  */
-const LEADING_DIRECTIVE = /^((?:\s|\/\/[^\n]*|\/\*[\s\S]*?\*\/)*)(["'])use client\2[ \t]*;?(?=[ \t]*(?:\r?\n|$|\/\/|\/\*))(?:[ \t]*\r?\n)*/
+const LEADING_DIRECTIVE =
+  /^((?:\s|\/\/[^\n]*|\/\*[\s\S]*?\*\/)*)(["'])use client\2[ \t]*;?(?=[ \t]*(?:\r?\n|$|\/\/|\/\*))(?:[ \t]*\r?\n)*/
 
 /**
  * `source` without a leading `'use client'` directive. Comments above it stay;

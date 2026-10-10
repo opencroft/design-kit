@@ -48,7 +48,10 @@ test('the record still updates when the spelling changes but the storage path do
 // Performed, this would silently lose content, and it would leave a duplicated
 // target that lets a delete address two records at once.
 test('a move onto another file of the same component is refused', () => {
-  assert.throws(() => planMoves(NAME, [ONE, TWO], [{ from: ONE.target, to: TWO.target }]), /already a file of component/)
+  assert.throws(
+    () => planMoves(NAME, [ONE, TWO], [{ from: ONE.target, to: TWO.target }]),
+    /already a file of component/,
+  )
 })
 
 test('the refusal leaves the caller a record that still declares both files', () => {
@@ -62,47 +65,69 @@ test('the refusal leaves the caller a record that still declares both files', ()
 })
 
 test('a source the component does not have is refused, and first', () => {
-  assert.throws(() => planMoves(NAME, [ONE], [{ from: 'components/ui/nope.tsx', to: 'x.tsx' }]), /no file "components\/ui\/nope\.tsx"/)
+  assert.throws(
+    () => planMoves(NAME, [ONE], [{ from: 'components/ui/nope.tsx', to: 'x.tsx' }]),
+    /no file "components\/ui\/nope\.tsx"/,
+  )
 })
 
 // Atomicity, as a property of the plan: a batch that cannot be satisfied
 // produces no moves at all, so nothing reaches the working tree.
 test('a batch whose later request is bad plans nothing at all', () => {
   assert.throws(() =>
-    planMoves(NAME, [ONE, TWO], [
-      { from: ONE.target, to: 'components/ui/renamed.tsx' },
-      { from: 'components/ui/nope.tsx', to: 'components/ui/other.tsx' },
-    ]),
+    planMoves(
+      NAME,
+      [ONE, TWO],
+      [
+        { from: ONE.target, to: 'components/ui/renamed.tsx' },
+        { from: 'components/ui/nope.tsx', to: 'components/ui/other.tsx' },
+      ],
+    ),
   )
 })
 
 test('a file renamed twice in one batch moves once, end to end', () => {
-  const plan = planMoves(NAME, [ONE], [
-    { from: ONE.target, to: 'components/ui/mid.tsx' },
-    { from: 'components/ui/mid.tsx', to: 'components/ui/final.tsx' },
-  ])
+  const plan = planMoves(
+    NAME,
+    [ONE],
+    [
+      { from: ONE.target, to: 'components/ui/mid.tsx' },
+      { from: 'components/ui/mid.tsx', to: 'components/ui/final.tsx' },
+    ],
+  )
   assert.deepEqual(plan.moves, [{ from: ONE.target, to: 'components/ui/final.tsx' }])
   assert.equal(plan.files[0].target, 'components/ui/final.tsx')
 })
 
 test('a rename undone inside the same batch moves nothing', () => {
-  const plan = planMoves(NAME, [ONE], [
-    { from: ONE.target, to: 'components/ui/mid.tsx' },
-    { from: 'components/ui/mid.tsx', to: ONE.target },
-  ])
+  const plan = planMoves(
+    NAME,
+    [ONE],
+    [
+      { from: ONE.target, to: 'components/ui/mid.tsx' },
+      { from: 'components/ui/mid.tsx', to: ONE.target },
+    ],
+  )
   assert.deepEqual(plan.moves, [])
 })
 
 test('two files can swap names, and both moves are reported', () => {
-  const plan = planMoves(NAME, [ONE, TWO], [
-    { from: ONE.target, to: 'components/ui/tmp.tsx' },
-    { from: TWO.target, to: ONE.target },
-    { from: 'components/ui/tmp.tsx', to: TWO.target },
-  ])
-  assert.deepEqual(plan.moves.sort((a, b) => a.from.localeCompare(b.from)), [
-    { from: ONE.target, to: TWO.target },
-    { from: TWO.target, to: ONE.target },
-  ])
+  const plan = planMoves(
+    NAME,
+    [ONE, TWO],
+    [
+      { from: ONE.target, to: 'components/ui/tmp.tsx' },
+      { from: TWO.target, to: ONE.target },
+      { from: 'components/ui/tmp.tsx', to: TWO.target },
+    ],
+  )
+  assert.deepEqual(
+    plan.moves.sort((a, b) => a.from.localeCompare(b.from)),
+    [
+      { from: ONE.target, to: TWO.target },
+      { from: TWO.target, to: ONE.target },
+    ],
+  )
 })
 
 test('a request matches by declared path as well as by served target', () => {
@@ -121,7 +146,10 @@ test('an ignored file keeps its internal storage root when it moves', () => {
 // already uses for host-bound code.
 test('the store plans the whole batch before it writes anything', () => {
   const source = readFileSync(new URL('./repo-store.ts', import.meta.url), 'utf-8')
-  const body = source.slice(source.indexOf('export async function moveFiles'), source.indexOf('export async function renameComponent'))
+  const body = source.slice(
+    source.indexOf('export async function moveFiles'),
+    source.indexOf('export async function renameComponent'),
+  )
   assert.match(body, /const plan = planMoves\(name, meta\.files, moves\)/)
   // Every read before any write, which is what makes a refusal leave nothing
   // behind. Asserted as "the gathering loop contains no write", because
@@ -137,7 +165,10 @@ test('the store plans the whole batch before it writes anything', () => {
 
 test('the store removes only the sources nothing moved into', () => {
   const source = readFileSync(new URL('./repo-store.ts', import.meta.url), 'utf-8')
-  const body = source.slice(source.indexOf('export async function moveFiles'), source.indexOf('export async function renameComponent'))
+  const body = source.slice(
+    source.indexOf('export async function moveFiles'),
+    source.indexOf('export async function renameComponent'),
+  )
   assert.match(body, /const destinations = new Set\(plan\.moves\.map\(\(m\) => m\.to\)\)/)
   assert.match(body, /if \(!destinations\.has\(move\.from\)\)/)
 })

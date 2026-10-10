@@ -23,7 +23,10 @@ test('setting a style is validated against the allow-list, and the refusal names
   assert.equal(parseShadcnStyle('  base-vega  '), 'base-vega')
   assert.equal(parseShadcnStyle(''), 'new-york-v4')
   assert.equal(parseShadcnStyle(undefined), 'new-york-v4')
-  assert.throws(() => parseShadcnStyle('new-york'), /unknown shadcn style "new-york"\. Valid styles: new-york-v4, base-vega/)
+  assert.throws(
+    () => parseShadcnStyle('new-york'),
+    /unknown shadcn style "new-york"\. Valid styles: new-york-v4, base-vega/,
+  )
   assert.throws(() => parseShadcnStyle('../../etc'), /unknown shadcn style/)
 })
 
@@ -39,7 +42,17 @@ test("create-era styles compile shadcn's custom variants; new-york-v4 compiles n
   for (const style of ['base-vega', 'base-nova', 'radix-vega']) {
     assert.equal(usesShadcnVariants(style), true, style)
     const css = shadcnStyleCss(style)
-    for (const variant of ['data-open', 'data-closed', 'data-checked', 'data-unchecked', 'data-selected', 'data-disabled', 'data-active', 'data-horizontal', 'data-vertical']) {
+    for (const variant of [
+      'data-open',
+      'data-closed',
+      'data-checked',
+      'data-unchecked',
+      'data-selected',
+      'data-disabled',
+      'data-active',
+      'data-horizontal',
+      'data-vertical',
+    ]) {
       assert.match(css, new RegExp(`@custom-variant ${variant} \\{`), `${style}: ${variant}`)
     }
     assert.match(css, /&:where\(\[data-orientation="horizontal"\]\)/)
@@ -96,6 +109,7 @@ test('a source without placeholders comes back byte-identical (every new-york-v4
 })
 
 test('a placeholder without a lucide name is left for the unresolved-import report', () => {
-  const src = 'import { IconPlaceholder } from "@/app/(create)/components/icon-placeholder"\nconst A = () => <IconPlaceholder tabler="IconX" />\n'
+  const src =
+    'import { IconPlaceholder } from "@/app/(create)/components/icon-placeholder"\nconst A = () => <IconPlaceholder tabler="IconX" />\n'
   assert.equal(transformIconPlaceholders(src), src)
 })

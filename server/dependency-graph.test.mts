@@ -6,7 +6,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { aliasImportNames, createDependencyGraphBuilder, type GraphComponentSummary, parseKitRef, reservedNamespaceReason } from './dependency-graph.ts'
+import {
+  aliasImportNames,
+  createDependencyGraphBuilder,
+  type GraphComponentSummary,
+  parseKitRef,
+  reservedNamespaceReason,
+} from './dependency-graph.ts'
 
 type Fixture = GraphComponentSummary & { source?: string }
 
@@ -39,7 +45,12 @@ const ALPHA: Fixture[] = [
       "import { Mystery } from '@/components/ui/mystery'", // inferred, nothing answers
     ].join('\n'),
   },
-  { name: 'chip', type: 'registry:ui', registryDependencies: ['badge'], source: "import { ChipBar } from '@/components/ui/chip'" },
+  {
+    name: 'chip',
+    type: 'registry:ui',
+    registryDependencies: ['badge'],
+    source: "import { ChipBar } from '@/components/ui/chip'",
+  },
   { name: 'helper', type: 'registry:ui' },
   { name: 'card', type: 'registry:ui', registryDependencies: ['@design-kit/panel'] },
   { name: 'frame', type: 'registry:ui', source: "import { Panel } from '@/components/ui/panel'" },
@@ -50,7 +61,11 @@ const BETA: Fixture[] = [
   { name: 'leaf', type: 'registry:ui' },
 ]
 
-const slugify = (name: string) => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+const slugify = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
 // Mirrors namespaceOf in server/target.ts: the stored slug is the address, and
 // the display name answers only for a project that has no slug of its own.
 const namespaceOf = (p: { name: string; slug?: string }) => p.slug || slugify(p.name)

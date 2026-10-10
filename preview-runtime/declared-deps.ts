@@ -11,7 +11,12 @@ import { depPackageName, isWorkspacePackageSpec, unverifiableDepModule } from '.
  * must share ONE React, and a declared `react` bundled on its own would be a
  * second copy.
  */
-export const REACT_FAMILY: ReadonlySet<string> = new Set(['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime'])
+export const REACT_FAMILY: ReadonlySet<string> = new Set([
+  'react',
+  'react-dom',
+  'react-dom/client',
+  'react/jsx-runtime',
+])
 
 /** One `dependencies` entry: `pkg`, `pkg@range` or `@scope/pkg@range`. */
 export interface DeclaredDependency {
@@ -42,7 +47,10 @@ export interface NpmModule {
   range: string
 }
 
-export type ModuleSource = { kind: 'builtin'; spec: string } | { kind: 'workspace'; spec: string } | ({ kind: 'npm' } & NpmModule)
+export type ModuleSource =
+  | { kind: 'builtin'; spec: string }
+  | { kind: 'workspace'; spec: string }
+  | ({ kind: 'npm' } & NpmModule)
 
 /**
  * Where an import's value comes from, given the declaring item's ranges (see

@@ -7,13 +7,23 @@ import { test } from 'node:test'
 
 import { changeSignals, isIndexRequest, REGISTRY_INDEX_NAME, shapeIndexItem, shapeProjects } from './registry-shape.ts'
 
-const slugify = (name: string) => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+const slugify = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
 // Mirrors namespaceOf in server/target.ts: the stored slug is the address, and
 // the display name answers only for a project that has no slug of its own.
 const namespaceOf = (p: { name: string; slug?: string }) => p.slug || slugify(p.name)
 
 test('the project list carries the id, the display name and the install namespace', () => {
-  const shaped = shapeProjects([{ id: 'dp_1', name: 'Base Components' }, { id: 'dp_2', name: 'My Product' }], namespaceOf)
+  const shaped = shapeProjects(
+    [
+      { id: 'dp_1', name: 'Base Components' },
+      { id: 'dp_2', name: 'My Product' },
+    ],
+    namespaceOf,
+  )
 
   assert.deepEqual(shaped, {
     projects: [
@@ -69,7 +79,14 @@ test('an empty slug is not an address, so the name still answers', () => {
 
 test('an index item carries the stable id alongside the current name', () => {
   const item = shapeIndexItem(
-    { id: 'cp_1', name: 'widget', type: 'registry:ui', title: 'Widget', description: 'does things', updatedAt: 1_700_000_000_000 },
+    {
+      id: 'cp_1',
+      name: 'widget',
+      type: 'registry:ui',
+      title: 'Widget',
+      description: 'does things',
+      updatedAt: 1_700_000_000_000,
+    },
     [{ path: 'widget.tsx', target: 'components/ui/widget.tsx', type: 'registry:component' }],
   )
 
@@ -92,8 +109,14 @@ test('every file in the index carries the type field the client validates agains
 })
 
 test('the id survives a rename, so a consumer can tell one from a deletion', () => {
-  const before = shapeIndexItem({ id: 'cp_1', name: 'widget', type: 'registry:ui', title: 'Widget', description: '', updatedAt: 1 }, [])
-  const after = shapeIndexItem({ id: 'cp_1', name: 'gadget', type: 'registry:ui', title: 'Gadget', description: '', updatedAt: 2 }, [])
+  const before = shapeIndexItem(
+    { id: 'cp_1', name: 'widget', type: 'registry:ui', title: 'Widget', description: '', updatedAt: 1 },
+    [],
+  )
+  const after = shapeIndexItem(
+    { id: 'cp_1', name: 'gadget', type: 'registry:ui', title: 'Gadget', description: '', updatedAt: 2 },
+    [],
+  )
 
   assert.equal(before.id, after.id)
   assert.notEqual(before.name, after.name)
@@ -104,7 +127,10 @@ test('the id survives a rename, so a consumer can tell one from a deletion', () 
 // on the index so that asking does not require fetching every item.
 
 test('an index item carries the timestamp a consumer compares against its own copy', () => {
-  const item = shapeIndexItem({ id: 'cp_1', name: 'widget', type: 'registry:ui', title: 'Widget', description: '', updatedAt: 1_700_000_000_000 }, [])
+  const item = shapeIndexItem(
+    { id: 'cp_1', name: 'widget', type: 'registry:ui', title: 'Widget', description: '', updatedAt: 1_700_000_000_000 },
+    [],
+  )
 
   assert.equal(item.updatedAt, 1_700_000_000_000)
 })
@@ -118,14 +144,20 @@ test('an index item carries the timestamp a consumer compares against its own co
 // against is an edit that gives the missing case a default. The test below it
 // is the one that fails if the field is not published.
 test('no version field is published while a record carries none', () => {
-  const item = shapeIndexItem({ id: 'cp_1', name: 'widget', type: 'registry:ui', title: 'Widget', description: '', updatedAt: 1 }, [])
+  const item = shapeIndexItem(
+    { id: 'cp_1', name: 'widget', type: 'registry:ui', title: 'Widget', description: '', updatedAt: 1 },
+    [],
+  )
 
   assert.equal('version' in item, false)
   assert.equal(Object.hasOwn(changeSignals({ updatedAt: 1 }), 'version'), false)
 })
 
 test('a version is published once a record carries one', () => {
-  const item = shapeIndexItem({ id: 'cp_1', name: 'widget', type: 'registry:ui', title: 'Widget', description: '', updatedAt: 1, version: 3 }, [])
+  const item = shapeIndexItem(
+    { id: 'cp_1', name: 'widget', type: 'registry:ui', title: 'Widget', description: '', updatedAt: 1, version: 3 },
+    [],
+  )
 
   assert.equal(item.version, 3)
   assert.deepEqual(changeSignals({ updatedAt: 1, version: 3 }), { updatedAt: 1, version: 3 })

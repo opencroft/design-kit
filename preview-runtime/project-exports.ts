@@ -30,7 +30,12 @@ export interface ProjectExports {
 export function sortGroupsByDependency(sources: readonly PoolGroup[]): PoolGroup[] {
   const infos = sources.map((group, i) => {
     const all = group.files.join('\n')
-    return { i, group, exports: exportedValueNames(all), needs: parseImports(all).flatMap((imp) => imp.bindings.map((b) => b.local)) }
+    return {
+      i,
+      group,
+      exports: exportedValueNames(all),
+      needs: parseImports(all).flatMap((imp) => imp.bindings.map((b) => b.local)),
+    }
   })
   const provider = new Map<string, number>()
   for (const g of infos) {
@@ -53,8 +58,7 @@ export function sortGroupsByDependency(sources: readonly PoolGroup[]): PoolGroup
   }
   const queue = infos.filter((g) => indegree[g.i] === 0).map((g) => g.i)
   const order: number[] = []
-  while (queue.length > 0) {
-    const i = queue.shift()!
+  for (let i = queue.shift(); i !== undefined; i = queue.shift()) {
     order.push(i)
     for (const j of dependents[i]) {
       if (--indegree[j] === 0) {
@@ -77,8 +81,15 @@ export function sortGroupsByDependency(sources: readonly PoolGroup[]): PoolGroup
 // order (see sortGroupsByDependency). The fixpoint stays as the backstop for
 // cyclic sibling references. Each group's imports resolve against its own
 // declared dependencies, through `modulesFor`.
-export function buildProjectExports(core: EvalCore, sources: readonly PoolGroup[], modulesFor: (dependencies: readonly string[]) => ModuleResolver): ProjectExports {
-  const ordered = sortGroupsByDependency(sources).map((group) => ({ files: group.files, modules: modulesFor(group.dependencies) }))
+export function buildProjectExports(
+  core: EvalCore,
+  sources: readonly PoolGroup[],
+  modulesFor: (dependencies: readonly string[]) => ModuleResolver,
+): ProjectExports {
+  const ordered = sortGroupsByDependency(sources).map((group) => ({
+    files: group.files,
+    modules: modulesFor(group.dependencies),
+  }))
   const globalExports: Record<string, unknown> = {}
   const resolve = (n: string) => globalExports[n]
   // Reset each pass rather than accumulate — a name unresolved in an early

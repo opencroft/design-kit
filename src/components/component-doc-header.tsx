@@ -18,7 +18,13 @@ export interface ComponentDocHeaderProps {
   actions?: ReactNode
 }
 
-export function ComponentDocHeader({ title, description, draft, registryDependencies = [], actions }: ComponentDocHeaderProps) {
+export function ComponentDocHeader({
+  title,
+  description,
+  draft,
+  registryDependencies = [],
+  actions,
+}: ComponentDocHeaderProps) {
   return (
     <div className='space-y-2'>
       <div className='flex items-start justify-between gap-4'>

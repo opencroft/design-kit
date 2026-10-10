@@ -1,14 +1,21 @@
 import * as React from 'react'
+import * as jsxRuntime from 'react/jsx-runtime'
 import * as ReactDOM from 'react-dom'
 import { createRoot } from 'react-dom/client'
-import * as jsxRuntime from 'react/jsx-runtime'
 
 import { baseScope, builtinModules } from './base-scope'
 import { moduleResolver, type NpmModule, npmModuleKey } from './declared-deps'
 import { depUrl } from './dep-url'
 import { createEvalCore, npmModules } from './eval-core'
-import { type FrameMessage, isPreviewMessage, type PoolGroup, PREVIEW_CHANNEL, type PreviewMode, type RenderPayload } from './protocol'
 import { buildProjectExports } from './project-exports'
+import {
+  type FrameMessage,
+  isPreviewMessage,
+  type PoolGroup,
+  PREVIEW_CHANNEL,
+  type PreviewMode,
+  type RenderPayload,
+} from './protocol'
 import { unverifiableDepReason } from './unverifiable-dep'
 
 // The preview iframe application. Bundled server-side (see server/preview.ts)
@@ -52,12 +59,20 @@ async function ensureDeps(modules: NpmModule[]): Promise<void> {
   )
 }
 
-function post(msg: Omit<FrameMessage, 'channel'>): void {
+// `Omit` over a union keeps only the keys every member shares, which would
+// refuse each message's own fields; this applies it to each member instead.
+type WithoutChannel<M> = M extends unknown ? Omit<M, 'channel'> : never
+
+function post(msg: WithoutChannel<FrameMessage>): void {
   window.parent.postMessage({ channel: PREVIEW_CHANNEL, ...msg }, window.location.origin)
 }
 
 function ErrorText({ msg }: { msg: string }) {
-  return <div className='m-4 whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-center font-mono text-xs text-destructive'>{msg}</div>
+  return (
+    <div className='m-4 whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-center font-mono text-xs text-destructive'>
+      {msg}
+    </div>
+  )
 }
 
 // Deliberately NOT the destructive treatment: an unverifiable dependency is not
@@ -65,7 +80,11 @@ function ErrorText({ msg }: { msg: string }) {
 // not be checked here. Distinct from both a clean render and a red failure — a
 // third visual state for the third verdict.
 function UnverifiableText({ msg }: { msg: string }) {
-  return <div className='m-4 whitespace-pre-wrap rounded-md border border-border bg-muted/40 px-4 py-3 text-center font-mono text-xs text-muted-foreground'>{msg}</div>
+  return (
+    <div className='m-4 whitespace-pre-wrap rounded-md border border-border bg-muted/40 px-4 py-3 text-center font-mono text-xs text-muted-foreground'>
+      {msg}
+    </div>
+  )
 }
 
 // React error #130 ("element type is invalid") almost always means one of these
@@ -76,11 +95,16 @@ function explain(error: string, unresolved: string[]): string {
     return error
   }
   const looksLikeMissingElement = /element type is invalid|https:\/\/react\.dev\/errors\/130/i.test(error)
-  const header = looksLikeMissingElement ? 'Unresolved imports (provide them via dependencies / registryDependencies):' : `${error}\n\nUnresolved imports:`
+  const header = looksLikeMissingElement
+    ? 'Unresolved imports (provide them via dependencies / registryDependencies):'
+    : `${error}\n\nUnresolved imports:`
   return `${header}\n${unresolved.map((u) => `  • ${u}`).join('\n')}`
 }
 
-class Boundary extends React.Component<{ children: React.ReactNode; unresolved?: string[]; renderKey?: string }, { error: string | null }> {
+class Boundary extends React.Component<
+  { children: React.ReactNode; unresolved?: string[]; renderKey?: string },
+  { error: string | null }
+> {
   state: { error: string | null } = { error: null }
 
   static getDerivedStateFromError(error: unknown): { error: string } {
@@ -103,7 +127,11 @@ class Boundary extends React.Component<{ children: React.ReactNode; unresolved?:
   render(): React.ReactNode {
     if (this.state.error !== null) {
       const unverifiable = unverifiableDepReason(this.state.error)
-      return unverifiable ? <UnverifiableText msg={unverifiable} /> : <ErrorText msg={explain(this.state.error, this.props.unresolved ?? [])} />
+      return unverifiable ? (
+        <UnverifiableText msg={unverifiable} />
+      ) : (
+        <ErrorText msg={explain(this.state.error, this.props.unresolved ?? [])} />
+      )
     }
     return this.props.children
   }
@@ -161,7 +189,9 @@ function renderPayload(payload: RenderPayload): Rendered {
                     <Comp {...props} />
                   </Boundary>
                 </div>
-                <code className='rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground'>{label}</code>
+                <code className='rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground'>
+                  {label}
+                </code>
               </div>
             )
           })}
@@ -224,10 +254,15 @@ function App({ payload }: { payload: RenderPayload }) {
 
 // ── boot ─────────────────────────────────────────────────────────────
 
-const rootEl = document.getElementById('root')
-if (!rootEl) {
-  throw new Error('preview shell is missing #root')
+function shellRoot(): HTMLElement {
+  const el = document.getElementById('root')
+  if (!el) {
+    throw new Error('preview shell is missing #root')
+  }
+  return el
 }
+
+const rootEl = shellRoot()
 const root = createRoot(rootEl)
 
 let seq = 0
@@ -379,23 +414,41 @@ if (selfLoadComponent && projectId) {
         return r.json()
       }
       const body = (await r.json().catch(() => null)) as { error?: string; available?: string[] } | null
-      const detail = body?.available?.length ? `${body.error}\n\nThis component documents:\n${body.available.map((t) => `  • ${t}`).join('\n')}` : body?.error
+      const detail = body?.available?.length
+        ? `${body.error}\n\nThis component documents:\n${body.available.map((t) => `  • ${t}`).join('\n')}`
+        : body?.error
       throw new Error(detail || `${r.status}`)
     })
-    .then((data: { sources: PoolGroup[]; mode?: PreviewMode; code: string | null; props?: Record<string, unknown>; exportName: string; dependencies: string[] }) => {
-      // The mode travels with the code because it is a property of the block
-      // that was opened, not of this page: an <Example> is a snippet and a
-      // <Preview> is a module with a default export, and rendering one as the
-      // other fails in a way that reads as a broken component. The route
-      // decides it, from the document — a URL cannot.
-      const code = data.code ?? `export default function Example() {\n  return <${data.exportName} />\n}`
-      const mode: PreviewMode = data.code != null && data.mode ? data.mode : 'default-export'
-      // Standalone = viewed as a page: no centering wrapper, so full-width
-      // components (page layouts, section backgrounds) stretch to the viewport.
-      const initial: RenderPayload = { mode, sources: data.sources, code, dependencies: data.dependencies, props: data.props ?? {}, fullBleed: true }
-      installSandbox(initial, ready)
-      return handleRender(initial)
-    })
+    .then(
+      (data: {
+        sources: PoolGroup[]
+        mode?: PreviewMode
+        code: string | null
+        props?: Record<string, unknown>
+        exportName: string
+        dependencies: string[]
+      }) => {
+        // The mode travels with the code because it is a property of the block
+        // that was opened, not of this page: an <Example> is a snippet and a
+        // <Preview> is a module with a default export, and rendering one as the
+        // other fails in a way that reads as a broken component. The route
+        // decides it, from the document — a URL cannot.
+        const code = data.code ?? `export default function Example() {\n  return <${data.exportName} />\n}`
+        const mode: PreviewMode = data.code != null && data.mode ? data.mode : 'default-export'
+        // Standalone = viewed as a page: no centering wrapper, so full-width
+        // components (page layouts, section backgrounds) stretch to the viewport.
+        const initial: RenderPayload = {
+          mode,
+          sources: data.sources,
+          code,
+          dependencies: data.dependencies,
+          props: data.props ?? {},
+          fullBleed: true,
+        }
+        installSandbox(initial, ready)
+        return handleRender(initial)
+      },
+    )
     .catch((e) => {
       root.render(<ErrorText msg={`failed to load component: ${e instanceof Error ? e.message : String(e)}`} />)
     })

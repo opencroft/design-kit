@@ -1,4 +1,5 @@
-import host from '@ext/host'
+import { cacheDir } from '@opencroft/server/storage'
+import { fs, path } from '@opencroft/server/system'
 
 import type { PoolGroup } from '../preview-runtime/protocol'
 import { DEFAULT_SHADCN_STYLE, effectiveShadcnStyle, transformIconPlaceholders } from './shadcn-style'
@@ -46,12 +47,12 @@ interface ShadcnItem {
 const memCache = new Map<string, ShadcnItem | null>()
 
 function cacheFile(style: string, name: string): string {
-  return host.path.join(host.cacheDir('shadcn-registry', style), `${name}.json`)
+  return path.join(cacheDir('shadcn-registry', style), `${name}.json`)
 }
 
 async function readCached(style: string, name: string): Promise<string | null> {
   try {
-    return await host.fs.readFile(cacheFile(style, name), 'utf-8')
+    return await fs.readFile(cacheFile(style, name), 'utf-8')
   } catch {
     return null
   }
@@ -75,15 +76,19 @@ async function fetchItem(name: string, requestedStyle: string): Promise<ShadcnIt
         return null
       }
       raw = await res.text()
-      await host.fs.mkdir(host.path.dirname(cacheFile(style, name)), { recursive: true })
-      await host.fs.writeFile(cacheFile(style, name), raw)
+      await fs.mkdir(path.dirname(cacheFile(style, name)), { recursive: true })
+      await fs.writeFile(cacheFile(style, name), raw)
     } catch {
       memCache.set(key, null)
       return null
     }
   }
   try {
-    const json = JSON.parse(raw) as { files?: Array<{ content?: unknown }>; dependencies?: unknown; registryDependencies?: unknown }
+    const json = JSON.parse(raw) as {
+      files?: Array<{ content?: unknown }>
+      dependencies?: unknown
+      registryDependencies?: unknown
+    }
     // The disk cache keeps the registry's bytes; the rewrites happen on read:
     // icon placeholders (a no-op on new-york-v4, whose items import lucide
     // directly) and the utils alias (see ./upstream-item).
@@ -94,7 +99,9 @@ async function fetchItem(name: string, requestedStyle: string): Promise<ShadcnIt
     const registryDependencies = Array.isArray(json.registryDependencies)
       ? json.registryDependencies.filter((d): d is string => typeof d === 'string' && /^[a-z0-9-]+$/.test(d))
       : []
-    const declared = Array.isArray(json.dependencies) ? json.dependencies.filter((d): d is string => typeof d === 'string') : []
+    const declared = Array.isArray(json.dependencies)
+      ? json.dependencies.filter((d): d is string => typeof d === 'string')
+      : []
     const dependencies = upstreamDependencies(files, declared)
     const item: ShadcnItem = { name, files, dependencies, registryDependencies }
     memCache.set(key, item)

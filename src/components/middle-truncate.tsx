@@ -1,6 +1,5 @@
-import { React } from '@ext/host'
-
 import { cn } from 'cn'
+import { type ComponentPropsWithoutRef, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 // Follows the kit source (@opencroft/middle-truncate): middle truncation cannot
 // be done in CSS — `text-overflow: ellipsis` only ever cuts the end, and the end
@@ -9,9 +8,9 @@ import { cn } from 'cn'
 // — rather than guessed from a character count that is wrong for every
 // proportional typeface.
 
-const useIsomorphicLayoutEffect = typeof window === 'undefined' ? React.useEffect : React.useLayoutEffect
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
-export interface MiddleTruncateProps extends Omit<React.ComponentPropsWithoutRef<'span'>, 'children'> {
+export interface MiddleTruncateProps extends Omit<ComponentPropsWithoutRef<'span'>, 'children'> {
   /** The whole value. What is shown is derived from it and the width. */
   text: string
   /** Keep exactly this many characters at the end and give the rest to the
@@ -27,9 +26,9 @@ function build(chars: string[], keep: number, tailChars: number | undefined, ell
 }
 
 export function MiddleTruncate({ text, tailChars, ellipsis = '…', className, ...props }: MiddleTruncateProps) {
-  const hostRef = React.useRef<HTMLSpanElement>(null)
-  const rulerRef = React.useRef<HTMLSpanElement>(null)
-  const [shown, setShown] = React.useState(text)
+  const hostRef = useRef<HTMLSpanElement>(null)
+  const rulerRef = useRef<HTMLSpanElement>(null)
+  const [shown, setShown] = useState(text)
 
   useIsomorphicLayoutEffect(() => {
     const host = hostRef.current
@@ -124,7 +123,11 @@ export function MiddleTruncate({ text, tailChars, ellipsis = '…', className, .
       <span className='sr-only'>{text}</span>
       {/* The ruler: same element, same inherited font, absolutely positioned and
           invisible so measuring costs no layout of its own. */}
-      <span ref={rulerRef} aria-hidden='true' className='pointer-events-none invisible absolute top-0 left-0 whitespace-pre' />
+      <span
+        ref={rulerRef}
+        aria-hidden='true'
+        className='pointer-events-none invisible absolute top-0 left-0 whitespace-pre'
+      />
     </span>
   )
 }
