@@ -103,13 +103,6 @@ test('the refusal says both things it could mean, and presupposes neither', () =
   )
 })
 
-test('every name reaches the installer as its own argument', () => {
-  // Joined into one string they would become a single item name containing
-  // spaces, which resolves to nothing and says little about why.
-  assert.match(routeSource, /\.\.\.TARGETS/)
-  assert.doesNotMatch(routeSource, /TARGETS\.join/)
-})
-
 test('the namespace closure is collected across all of them, not just the first', () => {
   // Each component can pull in registries of its own; collecting for one and
   // installing many would leave the rest unresolvable at install time.

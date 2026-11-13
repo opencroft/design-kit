@@ -8,9 +8,9 @@ import * as ReactDOM from 'react-dom'
 import { createRoot } from 'react-dom/client'
 
 // npm deps the preview pool imports are bundled the same way the browser
-// `preview/dep` endpoint does (esbuild → ESM string) — the exact bundle a
+// `preview/deps` endpoint does (esbuild → ESM string) — the exact bundle a
 // real preview frame would fetch. That bundle deliberately leaves
-// `react`/`react-dom`/`react/jsx-runtime` as bare imports (see bundleDep's
+// `react`/`react-dom`/`react/jsx-runtime` as bare imports (see bundleDeps's
 // `external`), because the browser frame resolves those through its own
 // import map onto the frame's shared React instead of a second copy — a
 // second copy means a component's hooks run against a dispatcher the

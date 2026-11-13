@@ -32,8 +32,9 @@ styles can't leak in and a design's styles can't leak out. Inside the frame:
 - **Fit-content sizing**: the frame reports its content height, so a preview
   grows to fit anything from a badge to a full page (capped with a *Show all*
   expander; *Open* launches the design standalone in a new tab).
-- **npm dependencies** a component imports are bundled on demand
-  (`preview/dep`) and share the frame's React via an import map, so a
+- **npm dependencies** the components import are bundled on demand, all of a
+  preview's pool together (`preview/deps`), so a package they share is loaded
+  once, and they share the frame's React via an import map, so a
   `dependencies` package renders in the preview exactly as it will on install.
 
 ## Registry (shadcn-shaped)

@@ -2,7 +2,7 @@ import { CodeBlock } from '@opencroft/client/code'
 import { Button, Popover, PopoverContent, PopoverTrigger } from '@opencroft/client/ui'
 import { Terminal } from 'lucide-react'
 
-import { formatComponentRef } from '../registry'
+import { formatComponentRef, SHADCN_PACKAGE } from '../registry'
 
 // Install affordance. Three ways to pull the component with the shadcn CLI:
 //   1. One-line install script — resolves the FULL cross-project dependency
@@ -27,7 +27,7 @@ export function InstallButton({ name, namespace, httpUrl, defaultOpen }: Install
   const http = httpUrl.replace(/\/+$/, '')
   const ref = formatComponentRef(namespace, name)
   const installCmd = `npx "${http}/install?component=${ref}"`
-  const directCmd = `npx shadcn@latest add "${http}/registry?component=${ref}"`
+  const directCmd = `npx ${SHADCN_PACKAGE} add "${http}/registry?component=${ref}"`
   // The template keeps the separate project/name pair: `{name}` is substituted
   // by the client, so it has to be a whole query value of its own.
   const registrySnippet = `{
@@ -35,7 +35,7 @@ export function InstallButton({ name, namespace, httpUrl, defaultOpen }: Install
     "@${namespace}": "${http}/registry?project=${namespace}&name={name}"
   }
 }`
-  const namedCmd = `npx shadcn@latest add @${namespace}/${name}`
+  const namedCmd = `npx ${SHADCN_PACKAGE} add @${namespace}/${name}`
 
   return (
     <Popover defaultOpen={defaultOpen}>

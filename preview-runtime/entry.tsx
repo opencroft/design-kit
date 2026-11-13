@@ -4,9 +4,9 @@ import * as ReactDOM from 'react-dom'
 import { createRoot } from 'react-dom/client'
 
 import { baseScope, builtinModules } from './base-scope'
-import { moduleResolver, type NpmModule, npmModuleKey } from './declared-deps'
-import { depUrl } from './dep-url'
-import { createEvalCore, npmModules } from './eval-core'
+import { moduleResolver, type NpmModule } from './declared-deps'
+import { bundleNamespaces, depsUrl } from './dep-url'
+import { createEvalCore, poolBundle } from './eval-core'
 import { buildProjectExports } from './project-exports'
 import {
   type FrameMessage,
@@ -33,30 +33,39 @@ import { unverifiableDepReason } from './unverifiable-dep'
   jsxRuntime,
 }
 
-// npm modules fetched from the dep endpoint, by npmModuleKey. Built-ins never
-// land here (see ./base-scope).
-const loadedModules = new Map<string, Record<string, unknown>>()
-const failedModules = new Map<string, string>()
+// The npm modules of each pool rendered so far, fetched from the deps endpoint
+// as one bundle (see ./dep-url), by the bundle's key. Built-ins never land
+// here (see ./base-scope).
+const loadedBundles = new Map<string, Map<string, Record<string, unknown>>>()
+const failedBundles = new Map<string, string>()
 
-const modulesFor = (dependencies: readonly string[]) => moduleResolver(dependencies, builtinModules, loadedModules)
+interface RenderPool {
+  /** the demoed code, as the group its imports resolve as: the demoed component's declarations */
+  demo: PoolGroup
+  key: string
+  modules: NpmModule[]
+}
 
-// Fetch server-bundled ESM for npm deps the sources import. Failures are
+// The demoed code and the one bundle every group of the render resolves
+// against, its own and the pool's.
+function renderPool(payload: RenderPayload): RenderPool {
+  const demo: PoolGroup = { files: [payload.code], dependencies: payload.dependencies }
+  return { demo, ...poolBundle([...payload.sources, demo]) }
+}
+
+// Fetch the server-bundled ESM for a pool's npm imports. Failures are
 // remembered (no refetch storm while typing) and surfaced under the preview.
-async function ensureDeps(modules: NpmModule[]): Promise<void> {
-  await Promise.all(
-    modules
-      .filter((m) => !loadedModules.has(npmModuleKey(m)) && !failedModules.has(npmModuleKey(m)))
-      .map(async (module) => {
-        const key = npmModuleKey(module)
-        try {
-          const url = new URL(depUrl(module), window.location.href).href
-          const ns = (await import(/* @vite-ignore */ url)) as Record<string, unknown>
-          loadedModules.set(key, ns)
-        } catch (e) {
-          failedModules.set(key, e instanceof Error ? e.message : String(e))
-        }
-      }),
-  )
+async function ensureDeps({ key, modules }: RenderPool): Promise<void> {
+  if (modules.length === 0 || loadedBundles.has(key) || failedBundles.has(key)) {
+    return
+  }
+  try {
+    const url = new URL(depsUrl(modules), window.location.href).href
+    const bundle = (await import(/* @vite-ignore */ url)) as Record<string, unknown>
+    loadedBundles.set(key, bundleNamespaces(modules, bundle))
+  } catch (e) {
+    failedBundles.set(key, e instanceof Error ? e.message : String(e))
+  }
 }
 
 // `Omit` over a union keeps only the keys every member shares, which would
@@ -145,11 +154,13 @@ interface Rendered {
   unresolved: string[]
 }
 
-function renderPayload(payload: RenderPayload): Rendered {
+function renderPayload(payload: RenderPayload, pool: RenderPool): Rendered {
   const core = createEvalCore({ React, baseScope })
+  const loaded = loadedBundles.get(pool.key) ?? new Map()
+  const modulesFor = (group: PoolGroup) => moduleResolver(group.dependencies, builtinModules, loaded)
   const projectExports = buildProjectExports(core, payload.sources, modulesFor)
   const resolve = (n: string) => projectExports.exports[n]
-  const modules = modulesFor(payload.dependencies)
+  const modules = modulesFor(pool.demo)
   // Sibling-group diagnostics ride along with whichever `unresolved` list this
   // function ends up returning — the previewed file's own imports may all
   // resolve fine while a dependency it pulled in internally didn't.
@@ -205,19 +216,19 @@ function renderPayload(payload: RenderPayload): Rendered {
   return { node: <Comp {...(payload.props ?? {})} />, error: null, unresolved }
 }
 
-function DepFailures() {
-  if (failedModules.size === 0) {
+function DepFailures({ pool }: { pool: RenderPool }) {
+  if (!failedBundles.has(pool.key)) {
     return null
   }
   return (
     <div className='mx-4 mb-2 whitespace-pre-wrap rounded border border-destructive/30 bg-muted/40 px-2 py-1 font-mono text-[10px] text-muted-foreground'>
-      {[...failedModules.keys()].map((m) => `failed to load dependency: ${m}`).join('\n')}
+      {`failed to load dependencies: ${pool.key.split('\n').join(', ')}`}
     </div>
   )
 }
 
-function App({ payload }: { payload: RenderPayload }) {
-  const { node, error, unresolved } = React.useMemo(() => renderPayload(payload), [payload])
+function App({ payload, pool }: { payload: RenderPayload; pool: RenderPool }) {
+  const { node, error, unresolved } = React.useMemo(() => renderPayload(payload, pool), [payload, pool])
 
   // Once per render, not once per change of `error`: two successful renders in a
   // row both carry `error: null`, so keying this on the error alone means the
@@ -236,7 +247,7 @@ function App({ payload }: { payload: RenderPayload }) {
         <Boundary key={payload.renderKey ?? payload.code} renderKey={payload.renderKey} unresolved={unresolved}>
           {node}
         </Boundary>
-        <DepFailures />
+        <DepFailures pool={pool} />
       </>
     )
   }
@@ -247,7 +258,7 @@ function App({ payload }: { payload: RenderPayload }) {
           {node}
         </Boundary>
       </div>
-      <DepFailures />
+      <DepFailures pool={pool} />
     </>
   )
 }
@@ -268,11 +279,12 @@ const root = createRoot(rootEl)
 let seq = 0
 async function handleRender(payload: RenderPayload): Promise<void> {
   const mySeq = ++seq
-  await ensureDeps(npmModules([...payload.sources, { files: [payload.code], dependencies: payload.dependencies }]))
+  const pool = renderPool(payload)
+  await ensureDeps(pool)
   if (mySeq !== seq) {
     return // superseded while deps were loading
   }
-  root.render(<App payload={payload} />)
+  root.render(<App payload={payload} pool={pool} />)
 }
 
 // ── driving a self-loading page from the outside ─────────────────────

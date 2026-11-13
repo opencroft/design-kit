@@ -1,5 +1,5 @@
 // loadDep imports a bundled npm dependency into the server-side validator.
-// bundleDep()'s real output deliberately leaves `react`/`react-dom`/
+// bundleDeps()'s real output deliberately leaves `react`/`react-dom`/
 // `react/jsx-runtime` as bare imports (the browser frame resolves those
 // through its own import map instead of a second React copy) — these tests
 // use a minimal fake bundle carrying that same shape, so the resolution is

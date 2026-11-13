@@ -25,8 +25,9 @@ import {
 } from './dependency-graph'
 import { createDesignKitApp } from './design-kit-app'
 import { installRequestFrom } from './install-request'
+import { installScriptSource } from './install-script'
 import {
-  bundleDep,
+  bundleDeps,
   createPreviewRoutes,
   DEFAULT_PRESET,
   type ProjectTheme,
@@ -1402,7 +1403,7 @@ export const apps = createDesignKitApp({ boundActions: instanceActions })
 // src/registry/component-ref.ts). A design project is a registry; configure it
 // in a consumer's components.json:
 //   "@design-kit": "https://<host><routeUrl('registry')>?project=<id>&name={name}"
-// then: npx shadcn@latest add @design-kit/<name>
+// then: npx shadcn@<SHADCN_VERSION> add @design-kit/<name> (src/registry/shadcn-cli.ts)
 // That template keeps the separate `project`/`name` pair, because the `{name}`
 // a client substitutes has to be a whole query value of its own.
 
@@ -1827,143 +1828,6 @@ async function buildPackageTarball(files: Array<{ name: string; content: string 
   return zlib.gzipSync(tar)
 }
 
-// `targets` rather than one target, because the whole-project form adds every
-// component in a single `shadcn add` — the CLI takes them variadically
-// (`shadcn add [components...]`, confirmed against the CLI's own help on
-// 14.09.2026), so one invocation resolves the closure across all of them
-// instead of N invocations each re-reading the registry.
-//
-// Deliberately not shadcn's own `--all`: that means every component of every
-// registry the consuming project has configured, which is a different and
-// wider thing than every component of THIS project.
-function installScriptSource(required: Record<string, string>, targets: string[]): string {
-  return `#!/usr/bin/env node
-'use strict'
-const fs = require('fs')
-const path = require('path')
-const { execFileSync } = require('child_process')
-
-const REQUIRED = ${JSON.stringify(required, null, 2)}
-const TARGETS = ${JSON.stringify(targets)}
-
-const configPath = path.join(process.cwd(), 'components.json')
-if (!fs.existsSync(configPath)) {
-  console.error('No components.json found in ' + process.cwd() + '. Run this from a shadcn-initialized project.')
-  process.exit(1)
-}
-
-const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
-const registries = config.registries || {}
-const added = []
-
-// Basic-auth-gated host support. Two env vars, one command, no files:
-//   \`npm_config_//<host>/:_auth=<base64 user:pass>\` — used by npm itself to
-//   fetch this script's tarball, but npm STRIPS credential-shaped config vars
-//   from the env it passes to package scripts, so this script cannot read it;
-//   \`DESIGN_KIT_AUTH=<same base64>\` — readable here, and referenced by the
-//   Authorization header templates below via shadcn's \${VAR} substitution,
-//   so the secret never lands in components.json.
-const host = new URL(REQUIRED[Object.keys(REQUIRED)[0]]).host
-const auth = process.env.DESIGN_KIT_AUTH || process.env['npm_config_//' + host + '/:_auth']
-if (auth) {
-  process.env.DESIGN_KIT_AUTH = auth
-  // Also satisfy env-var templates of registries ALREADY configured for this
-  // host with an auth header of their own (e.g. \${MY_REGISTRY_AUTH}) — same
-  // credential, whatever name the existing entry expects.
-  for (const key of Object.keys(registries)) {
-    const entry = registries[key]
-    if (!entry || typeof entry === 'string' || !entry.headers) {
-      continue
-    }
-    let entryHost = null
-    try {
-      entryHost = new URL(String(entry.url)).host
-    } catch (e) {}
-    if (entryHost !== host) {
-      continue
-    }
-    for (const hv of Object.values(entry.headers)) {
-      const m = /\\$\\{([A-Za-z0-9_]+)\\}/.exec(String(hv))
-      if (m && !process.env[m[1]]) {
-        process.env[m[1]] = auth
-      }
-    }
-  }
-}
-
-// A consumer that is not RSC is served its files with 'use client' already
-// removed (\`rsc=false\`, see server/client-directive.ts): shadcn's own removal
-// skips every other file of one install. Sent as registry \`params\` so the URL
-// still compares equal to an entry the consumer configured itself; such an
-// entry gets the parameter for this run only and is put back afterwards.
-const stripDirective = !config.rsc
-const augmented = {}
-
-for (const ns of Object.keys(REQUIRED)) {
-  const url = REQUIRED[ns]
-  const existing = registries[ns]
-  const existingUrl = typeof existing === 'string' ? existing : existing && existing.url
-  if (existing && existingUrl !== url) {
-    console.warn('Skipping ' + ns + ': already configured with a different URL (' + existingUrl + ')')
-    continue
-  }
-  if (!existing) {
-    const entry = { url: url }
-    if (auth) {
-      entry.headers = { Authorization: 'Basic \${DESIGN_KIT_AUTH}' }
-    }
-    if (stripDirective) {
-      entry.params = { rsc: 'false' }
-    }
-    registries[ns] = entry.headers || entry.params ? entry : url
-    added.push(ns)
-  } else if (stripDirective) {
-    augmented[ns] = existing
-    const entry = typeof existing === 'string' ? { url: existing } : Object.assign({}, existing)
-    entry.params = Object.assign({}, entry.params, { rsc: 'false' })
-    registries[ns] = entry
-  }
-}
-
-try {
-  if (added.length > 0 || Object.keys(augmented).length > 0) {
-    // Written directly (not \`shadcn registry add\`) so the entries can carry
-    // the auth header; the finally block below restores the file either way.
-    config.registries = registries
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\\n')
-  }
-  // Non-interactive: the design kit is the source of truth and installed
-  // components are read-only vendored copies — skip confirmation prompts and
-  // overwrite differing existing files instead of hanging on a prompt.
-  // Spread, so every target is its own argument. Joining them into one string
-  // would hand shadcn a single item whose name contains spaces, which resolves
-  // to nothing and reports no error worth reading.
-  //
-  // No partial handling on purpose: a failure here throws, the finally block
-  // below still restores components.json, and the script exits non-zero. A
-  // component that cannot be installed is the kit's defect or the component's,
-  // and neither is this installer's to absorb by carrying on.
-  execFileSync('npx', ['shadcn@latest', 'add', '--yes', '--overwrite', ...TARGETS], { stdio: 'inherit' })
-} finally {
-  if (added.length > 0 || Object.keys(augmented).length > 0) {
-    const fresh = JSON.parse(fs.readFileSync(configPath, 'utf8'))
-    if (fresh.registries) {
-      for (const ns of added) {
-        delete fresh.registries[ns]
-      }
-      for (const ns of Object.keys(augmented)) {
-        fresh.registries[ns] = augmented[ns]
-      }
-      if (Object.keys(fresh.registries).length === 0) {
-        delete fresh.registries
-      }
-    }
-    fs.writeFileSync(configPath, JSON.stringify(fresh, null, 2) + '\\n')
-  }
-}
-`
-}
-
 const MISSING_INSTALL_TARGET =
   'Missing component. Pass `component=<project>.<name>` for one component, or `component=<project>` for all of them — a `/` works in place of the `.`.'
 
@@ -2283,7 +2147,7 @@ const { validateComponent } = createValidator({
   readComponents: readEffectiveViaDb,
   buildPreviewSources,
   previewSourceFiles,
-  bundleDep,
+  bundleDeps,
 })
 
 // The dependency graph behind the doc page and the graph view: same stored

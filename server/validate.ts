@@ -3,7 +3,8 @@ import { renderToString } from 'react-dom/server'
 
 import { baseScope, builtinModules } from '../preview-runtime/base-scope'
 import { moduleResolver, type NpmModule, npmModuleKey, undeclaredPackages } from '../preview-runtime/declared-deps'
-import { createEvalCore, npmModules, parseImports } from '../preview-runtime/eval-core'
+import { bundleNamespaces } from '../preview-runtime/dep-url'
+import { createEvalCore, parseImports, poolBundle } from '../preview-runtime/eval-core'
 import { buildProjectExports } from '../preview-runtime/project-exports'
 import type { PoolGroup } from '../preview-runtime/protocol'
 import { unverifiableDepModule, unverifiableDepReason } from '../preview-runtime/unverifiable-dep'
@@ -129,7 +130,7 @@ export interface ValidateDeps {
   buildPreviewSources(projectId: string, component: string): Promise<PoolGroup[]>
   /** The component's own group within that pool — the files it contributes. */
   previewSourceFiles(component: ValidateStoredComponent): string[]
-  bundleDep(module: NpmModule): Promise<string>
+  bundleDeps(modules: readonly NpmModule[], pool?: readonly NpmModule[]): Promise<string>
 }
 
 const fileKey = (f: ValidateStoredFile): string => f.target || f.path
@@ -180,6 +181,35 @@ function renderTarget(target: string, unresolvedImports: string[], render: () =>
 }
 
 export function createValidator(deps: ValidateDeps) {
+  // `modules` loaded one bundle each, by npmModuleKey, each built from the
+  // install of them all.
+  async function loadEach(modules: readonly NpmModule[]): Promise<Map<string, Record<string, unknown>>> {
+    const loaded = new Map<string, Record<string, unknown>>()
+    await Promise.all(
+      modules.map(async (module) => {
+        const key = npmModuleKey(module)
+        try {
+          for (const [loadedKey, namespace] of bundleNamespaces(
+            [module],
+            await loadDep(await deps.bundleDeps([module], modules)),
+          )) {
+            loaded.set(loadedKey, namespace)
+          }
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e)
+          if (isBrowserOnly(message)) {
+            // Importable in the browser, not under react-dom/server — render
+            // against a placeholder so a target that uses it reports
+            // `unverifiable`, not an opaque undefined-element error.
+            loaded.set(key, unverifiableDepModule('browser-global', module.spec))
+          }
+          // Otherwise left unresolved — surfaces as an unresolved import below, same as the frame.
+        }
+      }),
+    )
+    return loaded
+  }
+
   async function validateOne(projectId: string, comp: ValidateStoredComponent): Promise<ValidateComponentResult> {
     const docs = docFiles(comp.files)
     const mdx = docs['doc.mdx']
@@ -195,30 +225,23 @@ export function createValidator(deps: ValidateDeps) {
       .filter(([path]) => /\.[jt]sx?$/.test(path))
       .map(([, content]) => content)
 
-    // Pre-warm every npm dependency the pool and the docs import — the module
+    // Pre-load the pool's npm bundle, the docs' imports included — the module
     // resolvers below must be synchronous (mirrors entry.tsx's ensureDeps).
-    const loadedModules = new Map<string, Record<string, unknown>>()
-    await Promise.all(
-      npmModules([...sources, { files: docCode, dependencies }]).map(async (module) => {
-        const key = npmModuleKey(module)
-        const { spec } = module
-        try {
-          loadedModules.set(key, await loadDep(await deps.bundleDep(module)))
-        } catch (e) {
-          const message = e instanceof Error ? e.message : String(e)
-          if (isBrowserOnly(message)) {
-            // Importable in the browser, not under react-dom/server — render
-            // against a placeholder so a target that uses it reports
-            // `unverifiable`, not an opaque undefined-element error.
-            loadedModules.set(key, unverifiableDepModule('browser-global', spec))
-          }
-          // Otherwise left unresolved — surfaces as an unresolved import below, same as the frame.
-        }
-      }),
-    )
+    const demo: PoolGroup = { files: docCode, dependencies }
+    const { modules: poolModules } = poolBundle([...sources, demo])
+    let loaded = new Map<string, Record<string, unknown>>()
+    if (poolModules.length > 0) {
+      try {
+        loaded = bundleNamespaces(poolModules, await loadDep(await deps.bundleDeps(poolModules)))
+      } catch {
+        // One module of the bundle would not load here, which fails them
+        // all; loading each on its own tells it apart from the rest.
+        loaded = await loadEach(poolModules)
+      }
+    }
 
-    const modulesFor = (declared: readonly string[]) => moduleResolver(declared, builtinModules, loadedModules)
-    const modules = modulesFor(dependencies)
+    const modulesFor = (group: PoolGroup) => moduleResolver(group.dependencies, builtinModules, loaded)
+    const modules = modulesFor(demo)
     const core = createEvalCore({ React, baseScope })
     const projectExports = buildProjectExports(core, sources, modulesFor)
     const resolve = (n: string) => projectExports.exports[n]

@@ -1,6 +1,7 @@
 import { transform } from 'sucrase'
 
 import { declaredRanges, type ModuleResolver, moduleSource, type NpmModule, npmModuleKey } from './declared-deps'
+import { bundleKey, bundleOrder } from './dep-url'
 import type { PoolGroup } from './protocol'
 
 // The eval engine that runs INSIDE the preview iframe. Host-free: no @opencroft/*
@@ -93,7 +94,7 @@ export function parseImports(source: string): ModuleImport[] {
  * The npm modules the groups import, each at the range its own group declares
  * (see moduleSource) — what has to be fetched before they can evaluate.
  */
-export function npmModules(groups: readonly PoolGroup[]): NpmModule[] {
+function npmModules(groups: readonly PoolGroup[]): NpmModule[] {
   const modules = new Map<string, NpmModule>()
   for (const group of groups) {
     const declared = declaredRanges(group.dependencies)
@@ -107,6 +108,20 @@ export function npmModules(groups: readonly PoolGroup[]): NpmModule[] {
     }
   }
   return [...modules.values()]
+}
+
+/**
+ * The npm modules a whole pool imports, each at the range its own group
+ * declares, which are fetched as one bundle (see ./dep-url), and the key that
+ * bundle is known by. Every group of the pool resolves its imports against
+ * this one bundle, and the server installs a package once for all the ranges
+ * the pool declares it at when one version satisfies them (see
+ * server/install-plan.ts), so a library two components share (a toast store,
+ * a context, a ProseMirror plugin key) is one instance for both.
+ */
+export function poolBundle(groups: readonly PoolGroup[]): { key: string; modules: NpmModule[] } {
+  const modules = bundleOrder(npmModules(groups))
+  return { key: bundleKey(modules), modules }
 }
 
 // Drop ESM import statements (their symbols are supplied via scope).

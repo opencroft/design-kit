@@ -1,6 +1,6 @@
 import type { Plugin } from 'esbuild'
 
-// On-demand dependency bundles (preview.ts bundleDep) are ESM with
+// On-demand dependency bundles (preview.ts bundleDeps) are ESM with
 // `react`/`react-dom`/`react/jsx-runtime` left EXTERNAL, so the frame's import
 // map lands every copy on the one React the frame runtime bundled. That works
 // for `import` — esbuild keeps it as an ESM import. It does NOT work for a

@@ -2,6 +2,8 @@
 // The shapes the dashboard renders a component from; ./from-stored.ts builds
 // them out of the records the server stores.
 
+import { SHADCN_PACKAGE } from './shadcn-cli'
+
 export type RegistryType = 'registry:ui' | 'registry:hook'
 
 export interface RegistryFile {
@@ -60,5 +62,5 @@ export function slugify(name: string): string {
 }
 
 export function installCommand(namespace: string, name: string): string {
-  return `npx shadcn@latest add @${namespace}/${name}`
+  return `npx ${SHADCN_PACKAGE} add @${namespace}/${name}`
 }

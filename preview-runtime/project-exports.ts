@@ -80,15 +80,16 @@ export function sortGroupsByDependency(sources: readonly PoolGroup[]): PoolGroup
 // Evaluate every component's files into one shared export map, in dependency
 // order (see sortGroupsByDependency). The fixpoint stays as the backstop for
 // cyclic sibling references. Each group's imports resolve against its own
-// declared dependencies, through `modulesFor`.
+// declared dependencies and the pool's one dependency bundle, through
+// `modulesFor`.
 export function buildProjectExports(
   core: EvalCore,
   sources: readonly PoolGroup[],
-  modulesFor: (dependencies: readonly string[]) => ModuleResolver,
+  modulesFor: (group: PoolGroup) => ModuleResolver,
 ): ProjectExports {
   const ordered = sortGroupsByDependency(sources).map((group) => ({
     files: group.files,
-    modules: modulesFor(group.dependencies),
+    modules: modulesFor(group),
   }))
   const globalExports: Record<string, unknown> = {}
   const resolve = (n: string) => globalExports[n]

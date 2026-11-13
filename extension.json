@@ -1,7 +1,7 @@
 {
   "id": "opencroft.design-kit",
   "name": "Design Kit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Design projects with a categorized component & hook library (shadcn-style live previews), one project per Design Kit App instance.",
   "provides": {
     "apps": [

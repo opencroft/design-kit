@@ -10,7 +10,7 @@ import { VersionTimeline } from './version-timeline'
 // A component's publish history: a horizontal timeline over its versions, the
 // selection it makes, and the record of what each version changed.
 //
-// The timeline's split handle selects one version or a range, and what a
+// The timeline's two thumbs select one version or a range, and what a
 // selection asks for is `comparisonFor` — a set of versions, shown as the
 // change those versions introduced. The draft, when the working tree is ahead
 // of the last publish, is the newest point, so "what have I changed since I

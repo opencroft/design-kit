@@ -4,9 +4,10 @@
 // the same answer however many times in a row it is asked — the property the
 // CLI's own regex lacks.
 //
-// The route and the install script live in index.ts, which imports
-// `@opencroft/server` and cannot be loaded here. The guards at the bottom read its
-// source and say only that the wiring is in place, not that it works.
+// The route lives in index.ts, which imports `@opencroft/server` and cannot be
+// loaded here. The guard at the bottom reads its source and says only that the
+// wiring is in place, not that it works. The install script's half runs for
+// real in install-script.test.mts.
 
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -77,10 +78,4 @@ const index = readFileSync(new URL('./index.ts', import.meta.url), 'utf-8')
 test('the registry item route serves stripped files when asked', () => {
   assert.match(index, /registryItem\([^;]*stripsClientDirective\(url\),?\s*\)/)
   assert.match(index, /stripDirective \? stripClientDirective\(content\) : content/)
-})
-
-test('the install script asks for it when the consumer is not RSC, and restores entries it borrowed', () => {
-  assert.match(index, /const stripDirective = !config\.rsc/)
-  assert.match(index, /entry\.params = \{ rsc: 'false' \}/)
-  assert.match(index, /fresh\.registries\[ns\] = augmented\[ns\]/)
 })

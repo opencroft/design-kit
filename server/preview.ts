@@ -1,10 +1,12 @@
 import { cacheDir } from '@opencroft/server/storage'
 import { execFile, fs, path } from '@opencroft/server/system'
+import type { Plugin } from 'esbuild'
 
-import type { NpmModule } from '../preview-runtime/declared-deps'
-import { depCacheKey } from '../preview-runtime/dep-url'
+import { type NpmModule, npmModuleKey } from '../preview-runtime/declared-deps'
+import { bundleExportName, bundleKey, bundleOrder, depsCacheKey, parseModuleKey } from '../preview-runtime/dep-url'
 import type { PoolGroup } from '../preview-runtime/protocol'
-import { depPackageName, isWorkspacePackageSpec } from '../preview-runtime/unverifiable-dep'
+import { isWorkspacePackageSpec } from '../preview-runtime/unverifiable-dep'
+import { type InstallPackage, installPlan } from './install-plan'
 import { docFilesOf, isResolved, resolvePreviewTarget } from './preview-target'
 import { requireBridgePlugin } from './require-bridge'
 import { effectiveShadcnStyle, shadcnStyleCss } from './shadcn-style'
@@ -17,8 +19,8 @@ import { effectiveShadcnStyle, shadcnStyleCss } from './shadcn-style'
 //                         frame, so arbitrary classes in stored designs work
 //   preview/shim/*.js     ESM shims mapping react/react-dom (via the shell's
 //                         import map) onto the frame runtime's copies
-//   preview/dep           npm dependency at a version range → browser ESM,
-//                         bundled on demand
+//   preview/deps          the npm modules one preview pool imports, at their
+//                         version ranges → one browser ESM, bundled on demand
 //   preview/data          a component's sources for standalone (new-tab) mode
 //
 // The loader executes the server bundle with __dirname = the extension root,
@@ -441,20 +443,33 @@ const SPEC_RE = /^(@[a-z0-9~][\w.~-]*\/)?[a-z0-9~][\w.~-]*(\/[\w.~/-]+)?$/i
 // `pkg@user/repo` as sources to fetch from rather than versions.
 const RANGE_RE = /^[\w.^~<>=|* +-]{0,64}$/
 
-// One npm prefix per package and range. Two ranges of one package cannot share
-// a node_modules, and a package installed for one range must not satisfy
-// another. The root holds nothing but these prefixes, so esbuild's upward
-// node_modules walk from one prefix never reaches another's packages.
-function installDir({ spec, range }: NpmModule): string {
-  return cacheDir('preview-npm', encodeURIComponent(`${depPackageName(spec)}@${range}`))
+// Bounds what one request may make the server install and build, and keeps
+// its URL short: a request names the npm modules of a whole preview pool (the
+// largest pool measured imports 48, 2026-10-30), at about 35 characters each,
+// so 200 modules is a URL of about 7 KB, under the 8 KB request line common
+// proxies accept. A pool importing more would be refused its preview.
+const MAX_BUNDLE_MODULES = 200
+
+// One npm prefix per set of packages and ranges, installed together so npm
+// resolves what they share once (see ./install-plan). Two ranges of one
+// package cannot share a node_modules, and a package installed for one set
+// must not satisfy another. The root holds nothing but these prefixes, so
+// esbuild's upward node_modules walk from one prefix never reaches another's
+// packages.
+async function installDir(packages: readonly InstallPackage[]): Promise<string> {
+  const key = packages.map(({ name, range }) => `${name}@${range}`).join('\n')
+  // A digest names the prefix: the list itself can outgrow a file name.
+  const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(key)))
+  const hex = [...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+  return cacheDir('preview-npm-sets', hex)
 }
 
 const installInFlight = new Map<string, Promise<void>>()
-// Keyed by depCacheKey (bundler version + spec + range). Only bundles live
-// here — the install dirs hold installed packages, never built output — so a
-// deploy (module reload) always rebuilds; the version in the key and in the
-// frame's dep URL (preview-runtime/dep-url.ts) is what keeps browsers from
-// reusing a bundle an older bundler built.
+// Keyed by depsCacheKey (bundler version + the modules with their ranges).
+// Only bundles live here — the install dirs hold installed packages, never
+// built output — so a deploy (module reload) always rebuilds; the version in
+// the key and in the frame's deps URL (preview-runtime/dep-url.ts) is what
+// keeps browsers from reusing a bundle an older bundler built.
 const depBundleCache = new Map<string, string>()
 
 // Left as bare ESM imports for the frame's import map (see IMPORT_MAP). A
@@ -464,17 +479,26 @@ const DEP_EXTERNALS = ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev
 
 // npm takes no cross-invocation lock on its own cache, and two `npm install`s
 // into one prefix at once corrupt each other's trees (partial writes, missing
-// files). The frame requests many deps in parallel, so serialize every install
-// onto a single chain — only one npm runs at a time.
+// files). Frames request deps in parallel, so serialize every install onto a
+// single chain — only one npm runs at a time.
 let installQueue: Promise<unknown> = Promise.resolve()
 
-async function ensureInstalled(module: NpmModule): Promise<void> {
-  const pkg = depPackageName(module.spec)
-  const depsDir = installDir(module)
-  const installed = path.join(depsDir, 'node_modules', pkg, 'package.json')
+// `preview-npm/` holds the prefixes of the bundler that installed each package
+// and range on its own. Nothing reads them, so the first install removes them,
+// on the install chain, where no npm is running.
+let legacyPrefixesRemoved = false
+
+async function removeLegacyPrefixes(): Promise<void> {
+  if (!legacyPrefixesRemoved) {
+    legacyPrefixesRemoved = true
+    await fs.rm(cacheDir('preview-npm'), { recursive: true, force: true })
+  }
+}
+
+async function ensureInstalled(packages: readonly InstallPackage[], depsDir: string): Promise<void> {
   const present = async (): Promise<boolean> => {
     try {
-      await fs.access(installed)
+      await Promise.all(packages.map(({ name }) => fs.access(path.join(depsDir, 'node_modules', name, 'package.json'))))
       return true
     } catch {
       return false
@@ -491,6 +515,7 @@ async function ensureInstalled(module: NpmModule): Promise<void> {
       if (await present()) {
         return
       }
+      await removeLegacyPrefixes()
       await fs.mkdir(depsDir, { recursive: true })
       const manifest = path.join(depsDir, 'package.json')
       try {
@@ -504,7 +529,7 @@ async function ensureInstalled(module: NpmModule): Promise<void> {
       // remote code-execution primitive.
       await execFile('npm', [
         'install',
-        module.range ? `${pkg}@${module.range}` : pkg,
+        ...packages.map(({ name, range }) => (range ? `${name}@${range}` : name)),
         '--prefix',
         depsDir,
         '--save',
@@ -523,32 +548,82 @@ async function ensureInstalled(module: NpmModule): Promise<void> {
   await pending
 }
 
-// Exported for server/validate.ts: the server-side validator loads npm deps
-// through this exact same esbuild bundling path (see loadDep there), so it
-// checks the identical dependency code the browser preview would fetch.
-export async function bundleDep(module: NpmModule): Promise<string> {
-  const { spec, range } = module
-  // A product workspace package is never installed from npm: its bare name can
-  // shadow an unrelated public package, and installing that would bundle a
-  // stranger's code as ours. Callers classify these as unverifiable before they
-  // get here; this is the fail-loud floor if one slips through.
-  if (isWorkspacePackageSpec(spec)) {
-    throw new Error(`"${spec}" names a product workspace package, which the preview never installs from npm`)
+// An entry import of a module installed in a prefix of its own (see
+// ./install-plan) names the prefix, `separate:<prefix>:<spec>`, and resolves
+// from there.
+const SEPARATE_PREFIX = 'separate:'
+
+function separatePrefixPlugin(dirs: readonly string[]): Plugin {
+  return {
+    name: 'separate-prefix',
+    setup(build) {
+      build.onResolve({ filter: /^separate:/ }, async (args) => {
+        const [prefix, ...spec] = args.path.slice(SEPARATE_PREFIX.length).split(':')
+        const resolved = await build.resolve(spec.join(':'), { kind: args.kind, resolveDir: dirs[Number(prefix)] })
+        return resolved.errors.length > 0 ? { errors: resolved.errors } : resolved
+      })
+    },
   }
-  // The range reaches npm as part of an install argument; see RANGE_RE.
-  if (!RANGE_RE.test(range)) {
-    throw new Error(`"${range}" is not a version range`)
+}
+
+/**
+ * The npm modules of one preview pool, bundled together as browser ESM: the
+ * module at index i of `bundleOrder(modules)` is the bundle's export
+ * `bundleExportName(i)`, its namespace. One install of every package the pool
+ * can share (see ./install-plan) and one build, so what the modules share is in
+ * the bundle once: a package reached through several entries (`@tiptap/core`
+ * from `@tiptap/react` and from every extension, `prosemirror-state` from each
+ * `@tiptap/pm/*`) or imported by several components at ranges one version
+ * satisfies is the same instance in all of them, which libraries that check
+ * `instanceof`, keyed plugins or a module-level store need.
+ *
+ * When `modules` is part of a larger pool, pass the whole pool as `pool`: the
+ * part is then built from the copies the whole pool's bundle installs.
+ *
+ * Exported for server/validate.ts: the server-side validator loads npm deps
+ * through this exact same esbuild bundling path (see loadDep there), so it
+ * checks the identical dependency code the browser preview would fetch.
+ */
+export async function bundleDeps(modules: readonly NpmModule[], pool: readonly NpmModule[] = modules): Promise<string> {
+  const ordered = bundleOrder(modules)
+  const installed = bundleOrder([...pool, ...modules])
+  for (const { spec, range } of installed) {
+    // A product workspace package is never installed from npm: its bare name
+    // can shadow an unrelated public package, and installing that would bundle
+    // a stranger's code as ours. Callers classify these as unverifiable before
+    // they get here; this is the fail-loud floor if one slips through.
+    if (isWorkspacePackageSpec(spec)) {
+      throw new Error(`"${spec}" names a product workspace package, which the preview never installs from npm`)
+    }
+    // The range reaches npm as part of an install argument; see RANGE_RE.
+    if (!RANGE_RE.test(range)) {
+      throw new Error(`"${range}" is not a version range`)
+    }
   }
-  const cacheKey = depCacheKey(module)
+  const cacheKey = `${depsCacheKey(ordered)}\n\n${bundleKey(installed)}`
   const cached = depBundleCache.get(cacheKey)
   if (cached) {
     return cached
   }
-  const depsDir = installDir(module)
-  await ensureInstalled(module)
+  const { prefixes, prefixOf } = installPlan(installed)
+  const dirs = await Promise.all(prefixes.map(installDir))
+  for (const [i, packages] of prefixes.entries()) {
+    if (packages.length > 0) {
+      await ensureInstalled(packages, dirs[i])
+    }
+  }
   const esbuild = await loadEsbuild()
-  // Re-export wrapper so both named and default/CJS exports survive.
-  const contents = `import * as __m from ${JSON.stringify(spec)}\nexport * from ${JSON.stringify(spec)}\nexport default (__m && __m.default !== undefined ? __m.default : __m)\n`
+  // A namespace import per module: its named exports, and `default` for an
+  // ES default or a CommonJS module's exports (see eval-core's moduleValue).
+  const entry = (module: NpmModule): string => {
+    const prefix = prefixOf.get(npmModuleKey(module)) ?? 0
+    return prefix === 0 ? module.spec : `${SEPARATE_PREFIX}${prefix}:${module.spec}`
+  }
+  const contents = [
+    ...ordered.map((module, i) => `import * as ${bundleExportName(i)} from ${JSON.stringify(entry(module))}`),
+    `export { ${ordered.map((_, i) => bundleExportName(i)).join(', ')} }`,
+  ].join('\n')
+  const depsDir = dirs[0]
   const result = await esbuild.build({
     stdin: { contents, resolveDir: depsDir, loader: 'js' },
     bundle: true,
@@ -560,7 +635,7 @@ export async function bundleDep(module: NpmModule): Promise<string> {
     logLevel: 'silent',
     define: { 'process.env.NODE_ENV': '"production"' },
     external: DEP_EXTERNALS,
-    plugins: [requireBridgePlugin(DEP_EXTERNALS)],
+    plugins: [requireBridgePlugin(DEP_EXTERNALS), separatePrefixPlugin(dirs)],
     loader: { '.css': 'empty' },
     nodePaths: [path.join(depsDir, 'node_modules')],
   })
@@ -634,25 +709,30 @@ ${THEME_WIRING}${styleCss ? `\n${styleCss}` : ''}
     return jsResponse(await readTailwindBrowser(), true)
   }
 
-  async function depRoute(req: Request): Promise<Response> {
+  async function depsRoute(req: Request): Promise<Response> {
     const url = new URL(req.url)
-    const spec = url.searchParams.get('name') ?? ''
-    const range = url.searchParams.get('range') ?? ''
-    if (!RANGE_RE.test(range)) {
-      return jsonResponse({ error: `Invalid version range: ${range}` }, 400)
+    const modules = url.searchParams.getAll('m').map(parseModuleKey)
+    if (modules.length === 0 || modules.length > MAX_BUNDLE_MODULES) {
+      return jsonResponse({ error: `Expected 1 to ${MAX_BUNDLE_MODULES} modules, got ${modules.length}` }, 400)
     }
-    // SPEC_RE's subpath group admits `.`/`..` segments (e.g.
-    // `marked/../../../etc/passwd`), which packageName() strips down to a
-    // valid-looking package name while esbuild still resolves the full
-    // (traversing) specifier — an arbitrary-file-read primitive. Reject any
-    // spec containing a `.` or `..` path segment outright.
-    if (!SPEC_RE.test(spec) || spec.split('/').some((segment) => segment === '.' || segment === '..')) {
-      return jsonResponse({ error: `Invalid package specifier: ${spec}` }, 400)
+    for (const { spec, range } of modules) {
+      if (!RANGE_RE.test(range)) {
+        return jsonResponse({ error: `Invalid version range: ${range}` }, 400)
+      }
+      // SPEC_RE's subpath group admits `.`/`..` segments (e.g.
+      // `marked/../../../etc/passwd`), which packageName() strips down to a
+      // valid-looking package name while esbuild still resolves the full
+      // (traversing) specifier — an arbitrary-file-read primitive. Reject any
+      // spec containing a `.` or `..` path segment outright.
+      if (!SPEC_RE.test(spec) || spec.split('/').some((segment) => segment === '.' || segment === '..')) {
+        return jsonResponse({ error: `Invalid package specifier: ${spec}` }, 400)
+      }
     }
     try {
-      return jsResponse(await bundleDep({ spec, range }), false)
+      return jsResponse(await bundleDeps(modules), false)
     } catch (e) {
-      return jsonResponse({ error: `Failed to bundle ${spec}: ${e instanceof Error ? e.message : String(e)}` }, 500)
+      const names = modules.map(({ spec }) => spec).join(', ')
+      return jsonResponse({ error: `Failed to bundle ${names}: ${e instanceof Error ? e.message : String(e)}` }, 500)
     }
   }
 
@@ -711,7 +791,7 @@ ${THEME_WIRING}${styleCss ? `\n${styleCss}` : ''}
     preview: shellRoute,
     'preview/runtime.js': runtimeRoute,
     'preview/tailwind.js': tailwindRoute,
-    'preview/dep': depRoute,
+    'preview/deps': depsRoute,
     'preview/data': dataRoute,
   }
   for (const [key, code] of Object.entries(SHIMS)) {
