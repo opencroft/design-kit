@@ -1,9 +1,10 @@
 import { useAppHref, useAppLocation, useAppNavigate } from '@opencroft/client/app'
+import { ChatDock, usePublishSelection } from '@opencroft/client/chat'
 import { Palette } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { PoolGroup } from '../preview-runtime/protocol'
-import { ChatDock, type ChatSelection } from './components/chat-panel'
+import { chatSelection } from './components/chat-selection'
 import { ComponentDoc } from './components/component-doc'
 import { ComponentPreviewPage } from './components/component-preview-page'
 import {
@@ -187,6 +188,16 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
     }
   }, [instanceId, item?.name])
 
+  // What the chat is offered: the open component, or the project when none
+  // is. With no resolved item it names only the project: with a request that
+  // did not resolve there is no component for the chat to claim is open.
+  // Nothing while the first list read is out, when which component is open
+  // is not known yet. The App's address is what an agent passes to
+  // `app_call`; the instance's slug is its namespace (`project.slug`).
+  usePublishSelection(
+    project && (item || !loadingComponents) ? chatSelection(`${spaceSlug}.${project.slug}`, item?.name) : null,
+  )
+
   if (project === undefined) {
     return <div className='p-6 py-12 text-center text-xs text-muted-foreground'>Loading…</div>
   }
@@ -209,23 +220,6 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
     draft: i.draft,
     href: appHref(componentAppPath(i.name)),
   }))
-
-  // Named for its type, since `selection` is the component resolution above.
-  // With no resolved item it names only the project: with a request that did
-  // not resolve there is no component for the chat to claim is open.
-  const chatSelection: ChatSelection | null = (() => {
-    const projectLine = `Design project: ${project.name} (${project.slug})`
-    if (!item) {
-      return { label: project.name, content: projectLine }
-    }
-    return {
-      label: `${project.name} · ${item.title || item.name}`,
-      content: [
-        projectLine,
-        `Component: ${item.name}${item.title && item.title !== item.name ? ` (${item.title})` : ''}`,
-      ].join('\n'),
-    }
-  })()
 
   // The shell composes these twice — pinned header over a scrolling tree side
   // by side, header over a folded tree stacked — so they stay two pieces.
@@ -327,37 +321,38 @@ function DesignKitLibrary({ instanceId, spaceSlug }: { instanceId: string; space
   )
 
   return (
-    <ChatDock space={spaceSlug} threadId={SPACE_THREAD_ID} selection={chatSelection}>
-      {editorOpen && item ? (
-        <div className='flex h-full flex-col' style={{ minHeight: 480 }}>
-          <SourceEditorPage
-            key={`${instanceId}:${item.name}`}
-            projectId={instanceId}
-            componentName={item.name}
-            draft={item.draft}
-            onExit={() => {
-              navigate(componentAppPath(item.name), { replace: true })
-              reloadComponents()
-            }}
-          />
-        </div>
-      ) : (
-        // `h-full` in the shell resolves, checked rather than assumed: the
-        // host's `main` is `h-dvh`, the App page mounts this in a `flex-1
-        // min-h-0` column of it, the host ChatDock root is `h-full min-h-0`,
-        // and ChatDock in components/chat-panel.tsx hands us a stretched
-        // `flex-1 overflow-auto` flex item. Side by side, the page itself never
-        // scrolls.
-        <LibraryShell
-          header={projectHeader}
-          tree={componentTree}
-          treeLabel={item?.title || item?.name}
-          treeOpen={treeOpen}
-          onTreeOpenChange={setTreeOpen}
-        >
-          {content}
-        </LibraryShell>
-      )}
+    <ChatDock space={spaceSlug} id={SPACE_THREAD_ID} title={`Chat · ${spaceSlug}`}>
+      <div className='min-h-0 min-w-0 flex-1 overflow-auto'>
+        {editorOpen && item ? (
+          <div className='flex h-full flex-col' style={{ minHeight: 480 }}>
+            <SourceEditorPage
+              key={`${instanceId}:${item.name}`}
+              projectId={instanceId}
+              componentName={item.name}
+              draft={item.draft}
+              onExit={() => {
+                navigate(componentAppPath(item.name), { replace: true })
+                reloadComponents()
+              }}
+            />
+          </div>
+        ) : (
+          // `h-full` in the shell resolves, checked rather than assumed: the
+          // host's `main` is `h-dvh`, the App page mounts this in a `flex-1
+          // min-h-0` column of it, the host ChatDock root is `h-full min-h-0`,
+          // and the wrapper above is a stretched `flex-1 overflow-auto` flex
+          // item of it. Side by side, the page itself never scrolls.
+          <LibraryShell
+            header={projectHeader}
+            tree={componentTree}
+            treeLabel={item?.title || item?.name}
+            treeOpen={treeOpen}
+            onTreeOpenChange={setTreeOpen}
+          >
+            {content}
+          </LibraryShell>
+        )}
+      </div>
     </ChatDock>
   )
 }
